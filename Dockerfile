@@ -33,4 +33,4 @@ WORKDIR /root/
 COPY --from=builder /app/vpbot .
 
 # Command to run the executable
-CMD ["./vpbot"] 
+ENTRYPOINT ["./vpbot"] 
