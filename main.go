@@ -5,12 +5,14 @@ import (
 	"flag"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
+	"github.com/jasonlvhit/gocron"
 	_ "github.com/mattn/go-sqlite3"
 	"os"
 	"os/signal"
 	"regexp"
 	"strings"
 	"syscall"
+	"time"
 )
 
 var (
@@ -18,11 +20,104 @@ var (
 	urlRegex *regexp.Regexp
 	db       *sql.DB
 
+	discord *discordgo.Session
+
 	insertPoliceChannel           *sql.Stmt
 	queryPoliceChannel            *sql.Stmt
 	deletePoliceChannel           *sql.Stmt
 	queryAllPoliceChannelForGuild *sql.Stmt
+
+	insertUserTrackChannel   *sql.Stmt
+	deleteUserTrackChannel   *sql.Stmt
+	queryAllUserTrackChannel *sql.Stmt
+	queryUserTrackChannel    *sql.Stmt
+
+	insertUserTrackData              *sql.Stmt
+	queryUserTrackDataByGuild        *sql.Stmt
+	queryUserTrackDataByGuildAndDate *sql.Stmt
 )
+
+type userTrackChannel struct {
+	guildID       string
+	postChannelID string
+}
+
+func postUserGraph() {
+	tracked := make([]userTrackChannel, 0)
+
+	rows, err := queryAllUserTrackChannel.Query()
+	if err != nil {
+		fmt.Println("ERR TRYING TO DO USER GRAPH!", err)
+		return
+	}
+
+	for rows.Next() {
+		var (
+			guildID       string
+			postChannelID string
+		)
+
+		if err := rows.Scan(&guildID, &postChannelID); err != nil {
+			fmt.Println("ERR TRYING TO DO USER GRAPH!", err)
+			return
+		}
+
+		tracked = append(tracked, userTrackChannel{guildID, postChannelID})
+	}
+	rows.Close()
+
+	for _, t := range tracked {
+		guild, err := discord.Guild(t.guildID)
+		if err != nil {
+			fmt.Println("ERR TRYING TO GET GUILD!", t.guildID, err)
+			return
+		}
+
+		now := time.Now().UTC()
+		year, week := now.ISOWeek()
+
+		insertUserTrackData.Exec(guild.ID, week, year, guild.MemberCount)
+
+		lastYear := year
+		lastWeek := week
+		if lastWeek-1 <= 0 {
+			lastYear--
+		} else {
+			lastWeek--
+		}
+
+		var lastWeekUserCount int
+
+		row := queryUserTrackDataByGuildAndDate.QueryRow(guild.ID, lastWeek, lastYear)
+		err = row.Scan(&lastWeekUserCount)
+		if err == sql.ErrNoRows {
+			discord.ChannelMessageSend(t.postChannelID, fmt.Sprintf("User count in week %v: %v", week, guild.MemberCount))
+			return
+		}
+
+		diff := guild.MemberCount - lastWeekUserCount
+
+		fmt.Println(lastWeekUserCount)
+		fmt.Println(guild.MemberCount)
+		fmt.Println(diff)
+		fmt.Println(float32(diff) / float32(lastWeekUserCount))
+		fmt.Println(float32(diff) / float32(lastWeekUserCount) * 100)
+
+		percent := float32(diff) / float32(lastWeekUserCount) * 100
+
+		symbol := "up"
+		if percent < 0 {
+			symbol = "down"
+		}
+
+		discord.ChannelMessageSend(t.postChannelID, fmt.Sprintf("User count in week %v %v: %v (%s %v%%)", week, year, guild.MemberCount, symbol, percent))
+	}
+}
+
+func cronSetup() {
+	gocron.Every(1).Sunday().At("15:00").DoSafely(postUserGraph)
+	<-gocron.Start()
+}
 
 func init() {
 
@@ -39,15 +134,26 @@ func main() {
 	urlRegex, _ = regexp.Compile(urlRegexString)
 	db, _ := sql.Open("sqlite3", "./vpbot.db")
 
-	statement, _ := db.Prepare("CREATE TABLE IF NOT EXISTS police_channels (id INTEGER PRIMARY KEY, guild_id TEXT, channel_id TEXT)")
-	statement.Exec()
+	db.Exec("CREATE TABLE IF NOT EXISTS police_channels (id INTEGER PRIMARY KEY, guild_id TEXT, channel_id TEXT)")
+	db.Exec("CREATE TABLE IF NOT EXISTS user_track_channel (id INTEGER PRIMARY KEY, guild_id TEXT, post_channel_id TEXT)")
+	db.Exec("CREATE TABLE IF NOT EXISTS user_track_data (id INTEGER PRIMARY KEY, guild_id TEXT, week_number INT, year INT, user_count INT)")
 
 	insertPoliceChannel, _ = db.Prepare("INSERT INTO police_channels (guild_id, channel_id) VALUES (?, ?)")
 	deletePoliceChannel, _ = db.Prepare("DELETE FROM police_channels WHERE channel_id = ?")
 	queryPoliceChannel, _ = db.Prepare("SELECT guild_id, channel_id FROM police_channels WHERE channel_id = ?")
 	queryAllPoliceChannelForGuild, _ = db.Prepare("SELECT channel_id FROM police_channels WHERE guild_id = ?")
 
-	discord, err := discordgo.New("Bot " + token)
+	insertUserTrackChannel, _ = db.Prepare("INSERT INTO user_track_channel (guild_id, post_channel_id) VALUES (?, ?)")
+	queryAllUserTrackChannel, _ = db.Prepare("SELECT guild_id, post_channel_id FROM user_track_channel")
+	queryUserTrackChannel, _ = db.Prepare("SELECT guild_id, post_channel_id FROM user_track_channel WHERE guild_id = ?")
+	deleteUserTrackChannel, _ = db.Prepare("DELETE FROM user_track_channel WHERE guild_id = ?")
+
+	insertUserTrackData, _ = db.Prepare("INSERT INTO user_track_data (guild_id, week_number, year, user_count) VALUES (?, ?, ?, ?)")
+	queryUserTrackDataByGuild, _ = db.Prepare("SELECT guild_id, week_number, year, user_count FROM user_track_data WHERE guild_id = ?")
+	queryUserTrackDataByGuildAndDate, _ = db.Prepare("SELECT user_count FROM user_track_data WHERE guild_id = ? AND week_number = ? AND year = ?")
+
+	var err error
+	discord, err = discordgo.New("Bot " + token)
 	if err != nil {
 		fmt.Println("error creating Discord session,", err)
 		os.Exit(1)
@@ -64,6 +170,8 @@ func main() {
 		fmt.Println("Error opening Discord session: ", err)
 		os.Exit(1)
 	}
+
+	go cronSetup()
 
 	fmt.Println("VPBot is now running.  Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
@@ -105,6 +213,29 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if userAllowedBotCommands(s, m.GuildID, m.ChannelID, m.Author.ID) {
 			if strings.HasPrefix(m.Content, "!test") {
 				s.ChannelMessageSend(m.ChannelID, "ACK")
+				return
+			}
+
+			if strings.HasPrefix(m.Content, "!usertrack") {
+				if isGuildUserTracked(m.GuildID) {
+					s.ChannelMessageSend(m.ChannelID, "Guild already tracked. o7")
+				} else {
+					insertUserTrackChannel.Exec(m.GuildID, m.ChannelID)
+					s.ChannelMessageSend(m.ChannelID, "Tracking guild user count, will post to this channel weekly. o7")
+				}
+
+				return
+			}
+
+			if strings.HasPrefix(m.Content, "!useruntrack") {
+				if isGuildUserTracked(m.GuildID) {
+					deleteUserTrackChannel.Exec(m.GuildID)
+					s.ChannelMessageSend(m.ChannelID, "Will stop tracking user count on this guild. o7")
+				} else {
+					s.ChannelMessageSend(m.ChannelID, "Guild already not tracked. o7")
+				}
+
+				return
 			}
 
 			if strings.HasPrefix(m.Content, "!police") {
@@ -113,6 +244,8 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				} else {
 					s.ChannelMessageSend(m.ChannelID, "Channel already policed. o7")
 				}
+
+				return
 			}
 
 			if strings.HasPrefix(m.Content, "!info") {
@@ -130,6 +263,8 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 					channel, _ := s.State.Channel(channelID)
 					s.ChannelMessageSend(m.ChannelID, channel.Name)
 				}
+
+				return
 			}
 
 			if strings.HasPrefix(m.Content, "!unpolice") {
@@ -138,11 +273,14 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				} else {
 					s.ChannelMessageSend(m.ChannelID, "Channel not policed!")
 				}
+
+				return
 			}
 
 			if strings.HasPrefix(m.Content, "!usercount") {
 				guild, _ := s.State.Guild(m.GuildID)
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Current user count: %d", guild.MemberCount))
+				return
 			}
 
 			return
@@ -205,6 +343,16 @@ func userAllowedBotCommands(s *discordgo.Session, guildID string, channelID stri
 	}
 
 	return hasPerm || hasRole
+}
+
+func isGuildUserTracked(guildID string) bool {
+	row := queryUserTrackChannel.QueryRow(guildID)
+	err := row.Scan()
+	if err == sql.ErrNoRows {
+		return false
+	}
+
+	return true
 }
 
 func isChannelPoliced(channelID string) bool {
