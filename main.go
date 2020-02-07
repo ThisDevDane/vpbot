@@ -144,9 +144,9 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				guild, _ := s.State.Guild(m.GuildID)
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Current user count: %d", guild.MemberCount))
 			}
-		}
 
-		return
+			return
+		}
 	}
 
 	if isChannelPoliced(m.ChannelID) {
@@ -158,6 +158,21 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			fmt.Printf("[%s|%s] Message did not furfill requirements! deleting message (%s) from %s#%s\n", guild.Name, channel.Name, m.ID, m.Author.Username, m.Author.Discriminator)
 			s.ChannelMessageDelete(channel.ID, m.ID)
 			sendPoliceDM(s, m.Author, guild, channel, "Message was deleted", "Showcase messages require that either you include a link or a picture/file in your message, if you believe your message has been wrongfully deleted, please contact a mod.\n If you wish to chat about showcase, please look for a #showcase-banter channel")
+		}
+
+		return
+	}
+
+	if len(m.Mentions) > 0 {
+		for _, mention := range m.Mentions {
+			if mention.ID == s.State.User.ID {
+				str := strings.ToLower(m.Content)
+				if strings.Contains(str, "math") {
+					msg := fmt.Sprintf("%s MATH IS THE WORST THING ON EARH", m.Author.Mention())
+					s.ChannelMessageSend(m.ChannelID, msg)
+				}
+				break
+			}
 		}
 	}
 }
