@@ -35,6 +35,9 @@ var (
 	insertUserTrackData              *sql.Stmt
 	queryUserTrackDataByGuild        *sql.Stmt
 	queryUserTrackDataByGuildAndDate *sql.Stmt
+
+	queryRandomMathSentence  *sql.Stmt
+	insertRandomMathSentence *sql.Stmt
 )
 
 type userTrackChannel struct {
@@ -137,6 +140,7 @@ func main() {
 	db.Exec("CREATE TABLE IF NOT EXISTS police_channels (id INTEGER PRIMARY KEY, guild_id TEXT, channel_id TEXT)")
 	db.Exec("CREATE TABLE IF NOT EXISTS user_track_channel (id INTEGER PRIMARY KEY, guild_id TEXT, post_channel_id TEXT)")
 	db.Exec("CREATE TABLE IF NOT EXISTS user_track_data (id INTEGER PRIMARY KEY, guild_id TEXT, week_number INT, year INT, user_count INT)")
+	db.Exec("CREATE TABLE IF NOT EXISTS math_sentence (id INTEGER PRIMARY KEY, sentence TEXT)")
 
 	insertPoliceChannel, _ = db.Prepare("INSERT INTO police_channels (guild_id, channel_id) VALUES (?, ?)")
 	deletePoliceChannel, _ = db.Prepare("DELETE FROM police_channels WHERE channel_id = ?")
@@ -151,6 +155,9 @@ func main() {
 	insertUserTrackData, _ = db.Prepare("INSERT INTO user_track_data (guild_id, week_number, year, user_count) VALUES (?, ?, ?, ?)")
 	queryUserTrackDataByGuild, _ = db.Prepare("SELECT guild_id, week_number, year, user_count FROM user_track_data WHERE guild_id = ?")
 	queryUserTrackDataByGuildAndDate, _ = db.Prepare("SELECT user_count FROM user_track_data WHERE guild_id = ? AND week_number = ? AND year = ?")
+
+	queryRandomMathSentence, _ = db.Prepare("SELECT sentence FROM math_sentence ORDER BY random() LIMIT 1")
+	insertRandomMathSentence, _ = db.Prepare("INSERT INTO math_sentence (sentence) VALUES (?)")
 
 	var err error
 	discord, err = discordgo.New("Bot " + token)
@@ -223,6 +230,19 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 					insertUserTrackChannel.Exec(m.GuildID, m.ChannelID)
 					s.ChannelMessageSend(m.ChannelID, "Tracking guild user count, will post to this channel weekly. o7")
 				}
+
+				return
+			}
+
+			if strings.HasPrefix(m.Content, "!addmathsentence") {
+				sentence := strings.TrimPrefix(m.Content, "!addmathsentence")
+				sentence = strings.TrimSpace(sentence)
+				if len(sentence) <= 1 {
+					s.ChannelMessageSend(m.ChannelID, "Remember to include sentence in command...")
+					return
+				}
+				insertRandomMathSentence.Exec(sentence)
+				s.ChannelMessageSend(m.ChannelID, "Added sentence to set! o7")
 
 				return
 			}
@@ -306,7 +326,21 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			if mention.ID == s.State.User.ID {
 				str := strings.ToLower(m.Content)
 				if strings.Contains(str, "math") {
-					msg := fmt.Sprintf("%s MATH IS THE WORST THING ON EARH", m.Author.Mention())
+
+					var sentence string
+					row := queryRandomMathSentence.QueryRow()
+					err := row.Scan(&sentence)
+					if err == sql.ErrNoRows {
+						sentence = "MATH IS THE WORST THING ON EARH"
+					}
+
+					recepient := m.Author
+
+					if len(m.Mentions) > 1 {
+						recepient = m.Mentions[1]
+					}
+
+					msg := fmt.Sprintf("%s %s", recepient.Mention(), sentence)
 					s.ChannelMessageSend(m.ChannelID, msg)
 				}
 				break
