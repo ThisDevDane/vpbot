@@ -7,9 +7,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag vpbot:dev
-    - name: Docker Publish
+    - name: Docker Login
       run: |
         docker login --username ${{ secrets.DOCKER_USERNAME }} --password ${{ secrets.GITHUB_TOKEN }} docker.pkg.github.com
-        docker push docker.pkg.github.com/thisdrunkdane/vpbot/vpbot:dev
+    - name: Build the Docker image
+      run: docker build . --file Dockerfile --tag thisdrunkdane/vpbot:dev
+    - name: Docker Publish
+      run: |
+        docker push thisdrunkdane/vpbot:dev
