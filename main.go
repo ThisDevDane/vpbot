@@ -131,13 +131,11 @@ func updateInfoChannel() {
 		return
 	}
 
-	idx++
-
 	var sb strings.Builder
 
 	sb.WriteString("Currently part of these guilds: \n")
 	for _, g := range discord.State.Guilds {
-		sb.WriteString(fmt.Sprintf(" - %s | %s %v", g.Name, g.ID, idx))
+		sb.WriteString(fmt.Sprintf(" - %s | %s\n", g.Name, g.ID))
 	}
 
 	messages, _ := discord.ChannelMessages(infoChannel.ID, 1, "", "", "")
@@ -149,11 +147,9 @@ func updateInfoChannel() {
 	}
 }
 
-var idx int
-
 func cronSetup() {
 	gocron.Every(1).Sunday().At("15:00").DoSafely(postUserGraph)
-	gocron.Every(10).Seconds().From(gocron.NextTick()).DoSafely(updateInfoChannel)
+	gocron.Every(2).Minutes().From(gocron.NextTick()).DoSafely(updateInfoChannel)
 	<-gocron.Start()
 }
 
