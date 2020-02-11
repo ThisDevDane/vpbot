@@ -8,7 +8,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Docker Login
-      run: echo ${{ secrets.DOCKERHUB_PASSWORD }} | docker login docker.pkg.github.com -u ${{ secrets.DOCKER_USERNAME }} --password-stdin 
+      run:  docker login docker.pkg.github.com -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.GITHUB_TOKEN }}
     - name: Build the Docker image
       run: docker build . --file Dockerfile --tag docker.pkg.github.com/thisdrunkdane/vpbot/vpbot:dev
     - name: Docker Publish
