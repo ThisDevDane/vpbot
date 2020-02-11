@@ -31,6 +31,7 @@ var (
 	queryPoliceChannel            *sql.Stmt
 	deletePoliceChannel           *sql.Stmt
 	queryAllPoliceChannelForGuild *sql.Stmt
+	queryAllPoliceChannel         *sql.Stmt
 
 	insertUserTrackChannel   *sql.Stmt
 	deleteUserTrackChannel   *sql.Stmt
@@ -47,6 +48,7 @@ var (
 	insertIdeasChannel        *sql.Stmt
 	deleteIdeasChannel        *sql.Stmt
 	queryIdeasChannelForGuild *sql.Stmt
+	queryAllIdeasChannel      *sql.Stmt
 )
 
 var (
@@ -138,6 +140,64 @@ func updateInfoChannel() {
 		sb.WriteString(fmt.Sprintf(" - %s | %s\n", g.Name, g.ID))
 	}
 
+	sb.WriteString("\nPolicing these channels: \n")
+	rows, _ := queryAllIdeasChannel.Query()
+	for rows.Next() {
+		var (
+			guildID   string
+			channelID string
+		)
+
+		if err := rows.Scan(&guildID, &channelID); err != nil {
+			continue
+		}
+
+		channel, _ := discord.State.Channel(channelID)
+		guild, _ := discord.State.Guild(guildID)
+
+		sb.WriteString(fmt.Sprintf("- #%s in '%s'\n", channel.Name, guild.Name))
+	}
+	rows.Close()
+
+	sb.WriteString("\nTracking users for these guilds: \n")
+	rows, _ = queryAllUserTrackChannel.Query()
+	for rows.Next() {
+		var (
+			guildID       string
+			postChannelID string
+		)
+
+		if err := rows.Scan(&guildID, &postChannelID); err != nil {
+			continue
+		}
+
+		channel, _ := discord.State.Channel(postChannelID)
+		guild, _ := discord.State.Guild(guildID)
+
+		sb.WriteString(fmt.Sprintf("- %s (posting in #%s)\n", guild.Name, channel.Name))
+	}
+	rows.Close()
+
+	sb.WriteString("\nTracking ideas for these guilds: \n")
+	rows, _ = queryAllIdeasChannel.Query()
+	for rows.Next() {
+		var (
+			guildID   string
+			channelID string
+		)
+
+		if err := rows.Scan(&guildID, &channelID); err != nil {
+			continue
+		}
+
+		channel, _ := discord.State.Channel(channelID)
+		guild, _ := discord.State.Guild(guildID)
+
+		sb.WriteString(fmt.Sprintf("- %s (posting in #%s)\n", guild.Name, channel.Name))
+	}
+	rows.Close()
+
+	// Post message
 	messages, _ := discord.ChannelMessages(infoChannel.ID, 1, "", "", "")
 	if len(messages) < 1 {
 		discord.ChannelMessageSend(infoChannel.ID, sb.String())
@@ -193,6 +253,7 @@ func main() {
 	deletePoliceChannel, _ = db.Prepare("DELETE FROM police_channels WHERE channel_id = ?")
 	queryPoliceChannel, _ = db.Prepare("SELECT guild_id, channel_id FROM police_channels WHERE channel_id = ?")
 	queryAllPoliceChannelForGuild, _ = db.Prepare("SELECT channel_id FROM police_channels WHERE guild_id = ?")
+	queryAllPoliceChannel, _ = db.Prepare("SELECT guild_id, channel_id FROM police_channels")
 
 	insertUserTrackChannel, _ = db.Prepare("INSERT INTO user_track_channel (guild_id, post_channel_id) VALUES (?, ?)")
 	queryAllUserTrackChannel, _ = db.Prepare("SELECT guild_id, post_channel_id FROM user_track_channel")
@@ -209,6 +270,7 @@ func main() {
 	insertIdeasChannel, _ = db.Prepare("INSERT INTO ideas_channel (guild_id, channel_id) VALUES (?, ?)")
 	deleteIdeasChannel, _ = db.Prepare("DELETE FROM ideas_channel WHERE channel_id = ?")
 	queryIdeasChannelForGuild, _ = db.Prepare("SELECT channel_id FROM ideas_channel WHERE guild_id = ?")
+	queryAllIdeasChannel, _ = db.Prepare("SELECT guild_id, channel_id FROM ideas_channel")
 
 	var err error
 	discord, err = discordgo.New("Bot " + token)
