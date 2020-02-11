@@ -8,6 +8,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/jasonlvhit/gocron"
 	_ "github.com/mattn/go-sqlite3"
+	"log"
 	"os"
 	"os/signal"
 	"regexp"
@@ -114,12 +115,6 @@ func postUserGraph() {
 
 		diff := guild.MemberCount - lastWeekUserCount
 
-		fmt.Println(lastWeekUserCount)
-		fmt.Println(guild.MemberCount)
-		fmt.Println(diff)
-		fmt.Println(float32(diff) / float32(lastWeekUserCount))
-		fmt.Println(float32(diff) / float32(lastWeekUserCount) * 100)
-
 		percent := float32(diff) / float32(lastWeekUserCount) * 100
 
 		symbol := "up"
@@ -142,6 +137,19 @@ func init() {
 	flag.StringVar(&adminGuildID, "a", "", "Admin Guild")
 	flag.BoolVar(&verbose, "v", false, "Verbose Output")
 	flag.Parse()
+}
+
+type discordLogger struct {
+	session       *discordgo.Session
+	logsChannelID string
+}
+
+func (l discordLogger) Write(p []byte) (n int, err error) {
+	_, e := l.session.ChannelMessageSend(l.logsChannelID, string(p))
+	if e == nil {
+		return len(p), nil
+	}
+	return 0, e
 }
 
 func main() {
@@ -230,6 +238,12 @@ func setupAdminGuild(s *discordgo.Session, guild *discordgo.Guild) {
 
 	modQueueChannel = setupTextChannel(guild, "mod-queue")
 	logsChannel = setupTextChannel(guild, "logs")
+	log.SetFlags(log.Lshortfile)
+	logger := discordLogger{
+		session:       discord,
+		logsChannelID: logsChannel.ID,
+	}
+	log.SetOutput(logger)
 	infoChannel = setupTextChannel(guild, "info")
 }
 
@@ -284,7 +298,7 @@ func messageReactionAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 	user, _ := s.User(r.UserID)
 
 	if verbose {
-		fmt.Printf("[%s|%s|%s#%s] (%s) Reaction added: %+v\n", guild.Name, channel.Name, user.Username, user.Discriminator, r.MessageID, r.Emoji)
+		log.Printf("[%s|%s|%s#%s] (%s) Reaction added: %+v\n", guild.Name, channel.Name, user.Username, user.Discriminator, r.MessageID, r.Emoji)
 	}
 
 	if r.ChannelID == modQueueChannel.ID {
@@ -320,7 +334,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	channel, _ := s.State.Channel(m.ChannelID)
 
 	if verbose {
-		fmt.Printf("[%s|%s|%s#%s] (%s) %s\n", guild.Name, channel.Name, m.Author.Username, m.Author.Discriminator, m.ID, m.Content)
+		log.Printf("[%s|%s|%s#%s] (%s) %s\n", guild.Name, channel.Name, m.Author.Username, m.Author.Discriminator, m.ID, m.Content)
 	}
 
 	if strings.HasPrefix(m.Content, "!") {
@@ -455,7 +469,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if len(m.Attachments) <= 0 && len(m.Embeds) <= 0 && urlInMessage == false {
 			guild, _ := s.State.Guild(m.GuildID)
 			channel, _ := s.State.Channel(m.ChannelID)
-			fmt.Printf("[%s|%s] Message did not furfill requirements! deleting message (%s) from %s#%s\n", guild.Name, channel.Name, m.ID, m.Author.Username, m.Author.Discriminator)
+			log.Printf("[%s|%s] Message did not furfill requirements! deleting message (%s) from %s#%s\n", guild.Name, channel.Name, m.ID, m.Author.Username, m.Author.Discriminator)
 			s.ChannelMessageDelete(channel.ID, m.ID)
 			sendPoliceDM(s, m.Author, guild, channel, "Message was deleted", "Showcase messages require that either you include a link or a picture/file in your message, if you believe your message has been wrongfully deleted, please contact a mod.\n If you wish to chat about showcase, please look for a #showcase-banter channel")
 		}
@@ -520,7 +534,7 @@ func setupIdeasChannel(s *discordgo.Session, channelID string, user *discordgo.U
 	}
 
 	insertIdeasChannel.Exec(guild.ID, channel.ID)
-	fmt.Printf("Setup ideas '%s'(%s) in '%s', requested by %s#%s\n", channel.Name, channel.ID, guild.Name, user.Username, user.Discriminator)
+	log.Printf("Setup ideas '%s'(%s) in '%s', requested by %s#%s\n", channel.Name, channel.ID, guild.Name, user.Username, user.Discriminator)
 
 	return true
 }
@@ -583,7 +597,7 @@ func policeChannel(s *discordgo.Session, channelID string, user *discordgo.User)
 	channel, _ := s.State.Channel(channelID)
 	guild, _ := s.State.Guild(channel.GuildID)
 	insertPoliceChannel.Exec(guild.ID, channel.ID)
-	fmt.Printf("Observing '%s'(%s) in '%s', requested by %s#%s\n", channel.Name, channel.ID, guild.Name, user.Username, user.Discriminator)
+	log.Printf("Observing '%s'(%s) in '%s', requested by %s#%s\n", channel.Name, channel.ID, guild.Name, user.Username, user.Discriminator)
 
 	return true
 }
@@ -593,7 +607,7 @@ func unpoliceChannel(s *discordgo.Session, channelID string, user *discordgo.Use
 		channel, _ := s.State.Channel(channelID)
 		guild, _ := s.State.Guild(channel.GuildID)
 		deletePoliceChannel.Exec(channel.ID)
-		fmt.Printf("Stopped observing '%s'(%s) in '%s', requested by %s#%s\n", channel.Name, channel.ID, guild.Name, user.Username, user.Discriminator)
+		log.Printf("Stopped observing '%s'(%s) in '%s', requested by %s#%s\n", channel.Name, channel.ID, guild.Name, user.Username, user.Discriminator)
 		return true
 	}
 
