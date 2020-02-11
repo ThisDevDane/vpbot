@@ -281,10 +281,8 @@ func main() {
 
 	discord.StateEnabled = true
 
-	discord.AddHandler(ready)
 	discord.AddHandler(messageCreate)
 	discord.AddHandler(messageReactionAdd)
-	discord.AddHandler(guildCreate)
 
 	err = discord.Open()
 	if err != nil {
@@ -340,27 +338,6 @@ func setupTextChannel(guild *discordgo.Guild, name string) *discordgo.Channel {
 
 	newChannel, _ := discord.GuildChannelCreate(guild.ID, name, discordgo.ChannelTypeGuildText)
 	return newChannel
-}
-
-func guildCreate(s *discordgo.Session, g *discordgo.GuildCreate) {
-	// fmt.Printf("Bot has joined a guild! '%s'(%s)\n", g.Name, g.ID)
-
-	// fmt.Println("Bot is now part of these guilds:")
-	// for _, guild := range s.State.Guilds {
-	// 	fmt.Printf("\t '%s'(%s)\n", guild.Name, guild.ID)
-	// }
-}
-
-func ready(s *discordgo.Session, r *discordgo.Ready) {
-	// if len(r.Guilds) <= 0 {
-	// 	return
-	// }
-
-	// fmt.Println("Bot is part of these guilds:")
-
-	// for _, guild := range r.Guilds {
-	// 	fmt.Printf("\t '%s'(%s)\n", guild.Name, guild.ID)
-	// }
 }
 
 type modQueueItem struct {
