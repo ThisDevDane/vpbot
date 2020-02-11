@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
@@ -16,7 +17,10 @@ import (
 )
 
 var (
-	token    string
+	token        string
+	verbose      bool
+	adminGuildID string
+
 	urlRegex *regexp.Regexp
 	db       *sql.DB
 
@@ -38,6 +42,16 @@ var (
 
 	queryRandomMathSentence  *sql.Stmt
 	insertRandomMathSentence *sql.Stmt
+
+	insertIdeasChannel        *sql.Stmt
+	deleteIdeasChannel        *sql.Stmt
+	queryIdeasChannelForGuild *sql.Stmt
+)
+
+var (
+	modQueueChannel *discordgo.Channel
+	logsChannel     *discordgo.Channel
+	infoChannel     *discordgo.Channel
 )
 
 type userTrackChannel struct {
@@ -125,6 +139,8 @@ func cronSetup() {
 func init() {
 
 	flag.StringVar(&token, "t", "", "Bot Token")
+	flag.StringVar(&adminGuildID, "a", "", "Admin Guild")
+	flag.BoolVar(&verbose, "v", false, "Verbose Output")
 	flag.Parse()
 }
 
@@ -141,6 +157,7 @@ func main() {
 	db.Exec("CREATE TABLE IF NOT EXISTS user_track_channel (id INTEGER PRIMARY KEY, guild_id TEXT, post_channel_id TEXT)")
 	db.Exec("CREATE TABLE IF NOT EXISTS user_track_data (id INTEGER PRIMARY KEY, guild_id TEXT, week_number INT, year INT, user_count INT)")
 	db.Exec("CREATE TABLE IF NOT EXISTS math_sentence (id INTEGER PRIMARY KEY, sentence TEXT)")
+	db.Exec("CREATE TABLE IF NOT EXISTS ideas_channel (id INTEGER PRIMARY KEY, guild_id TEXT, channel_id TEXT)")
 
 	insertPoliceChannel, _ = db.Prepare("INSERT INTO police_channels (guild_id, channel_id) VALUES (?, ?)")
 	deletePoliceChannel, _ = db.Prepare("DELETE FROM police_channels WHERE channel_id = ?")
@@ -159,6 +176,10 @@ func main() {
 	queryRandomMathSentence, _ = db.Prepare("SELECT sentence FROM math_sentence ORDER BY random() LIMIT 1")
 	insertRandomMathSentence, _ = db.Prepare("INSERT INTO math_sentence (sentence) VALUES (?)")
 
+	insertIdeasChannel, _ = db.Prepare("INSERT INTO ideas_channel (guild_id, channel_id) VALUES (?, ?)")
+	deleteIdeasChannel, _ = db.Prepare("DELETE FROM ideas_channel WHERE channel_id = ?")
+	queryIdeasChannelForGuild, _ = db.Prepare("SELECT channel_id FROM ideas_channel WHERE guild_id = ?")
+
 	var err error
 	discord, err = discordgo.New("Bot " + token)
 	if err != nil {
@@ -170,12 +191,26 @@ func main() {
 
 	discord.AddHandler(ready)
 	discord.AddHandler(messageCreate)
+	discord.AddHandler(messageReactionAdd)
 	discord.AddHandler(guildCreate)
 
 	err = discord.Open()
 	if err != nil {
 		fmt.Println("Error opening Discord session: ", err)
 		os.Exit(1)
+	}
+
+	if len(adminGuildID) > 0 {
+		// Setup admin guild
+		fmt.Println("Setting up admin guild")
+		adminGuild, err := discord.Guild(adminGuildID)
+
+		if err != nil {
+			fmt.Println("Could not find admin guild:", adminGuildID, err)
+		} else {
+			setupAdminGuild(discord, adminGuild)
+		}
+
 	}
 
 	go cronSetup()
@@ -190,24 +225,89 @@ func main() {
 
 }
 
-func guildCreate(s *discordgo.Session, g *discordgo.GuildCreate) {
-	fmt.Printf("Bot has joined a guild! '%s'(%s)\n", g.Name, g.ID)
+func setupAdminGuild(s *discordgo.Session, guild *discordgo.Guild) {
+	fmt.Println("Setting up channels")
 
-	fmt.Println("Bot is now part of these guilds:")
-	for _, guild := range s.State.Guilds {
-		fmt.Printf("\t '%s'(%s)\n", guild.Name, guild.ID)
+	modQueueChannel = setupTextChannel(guild, "mod-queue")
+	logsChannel = setupTextChannel(guild, "logs")
+	infoChannel = setupTextChannel(guild, "info")
+}
+
+func setupTextChannel(guild *discordgo.Guild, name string) *discordgo.Channel {
+	for _, c := range guild.Channels {
+		if c.Name == name {
+			return c
+		}
 	}
+
+	newChannel, _ := discord.GuildChannelCreate(guild.ID, name, discordgo.ChannelTypeGuildText)
+	return newChannel
+}
+
+func guildCreate(s *discordgo.Session, g *discordgo.GuildCreate) {
+	// fmt.Printf("Bot has joined a guild! '%s'(%s)\n", g.Name, g.ID)
+
+	// fmt.Println("Bot is now part of these guilds:")
+	// for _, guild := range s.State.Guilds {
+	// 	fmt.Printf("\t '%s'(%s)\n", guild.Name, guild.ID)
+	// }
 }
 
 func ready(s *discordgo.Session, r *discordgo.Ready) {
-	if len(r.Guilds) <= 0 {
+	// if len(r.Guilds) <= 0 {
+	// 	return
+	// }
+
+	// fmt.Println("Bot is part of these guilds:")
+
+	// for _, guild := range r.Guilds {
+	// 	fmt.Printf("\t '%s'(%s)\n", guild.Name, guild.ID)
+	// }
+}
+
+type modQueueItem struct {
+	AuthorID         string `json:authorID`
+	AuthorName       string `json:authorName`
+	GuildID          string `json:guildID`
+	GuildName        string `json:guildName`
+	PostingChannelID string `json:postingChannelID`
+	Content          string `json:content`
+}
+
+func messageReactionAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
+	if r.UserID == s.State.User.ID {
 		return
 	}
 
-	fmt.Println("Bot is part of these guilds:")
+	guild, _ := s.State.Guild(r.GuildID)
+	channel, _ := s.State.Channel(r.ChannelID)
+	user, _ := s.User(r.UserID)
 
-	for _, guild := range r.Guilds {
-		fmt.Printf("\t '%s'(%s)\n", guild.Name, guild.ID)
+	if verbose {
+		fmt.Printf("[%s|%s|%s#%s] (%s) Reaction added: %+v\n", guild.Name, channel.Name, user.Username, user.Discriminator, r.MessageID, r.Emoji)
+	}
+
+	if r.ChannelID == modQueueChannel.ID {
+		if r.Emoji.Name == "yes" {
+			m, _ := s.ChannelMessage(r.ChannelID, r.MessageID)
+
+			// Already moderated?
+			for _, e := range m.Reactions {
+				if (e.Emoji.Name == "yes" || e.Emoji.Name == "no") && e.Emoji.Name != r.Emoji.Name {
+					return
+				}
+			}
+
+			var item modQueueItem
+			if err := json.Unmarshal([]byte(m.Content), &item); err != nil {
+				s.ChannelMessageSend(r.ChannelID, err.Error())
+			} else {
+				member, _ := s.GuildMember(item.GuildID, item.AuthorID)
+				message := fmt.Sprintf("%s's idea: %s", member.User.Mention(), item.Content)
+
+				s.ChannelMessageSend(item.PostingChannelID, message)
+			}
+		}
 	}
 }
 
@@ -216,8 +316,41 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
+	guild, _ := s.State.Guild(m.GuildID)
+	channel, _ := s.State.Channel(m.ChannelID)
+
+	if verbose {
+		fmt.Printf("[%s|%s|%s#%s] (%s) %s\n", guild.Name, channel.Name, m.Author.Username, m.Author.Discriminator, m.ID, m.Content)
+	}
+
 	if strings.HasPrefix(m.Content, "!") {
-		if userAllowedBotCommands(s, m.GuildID, m.ChannelID, m.Author.ID) {
+		if strings.HasPrefix(m.Content, "!addidea") {
+			ok, postingChannelID := hasGuildIdeasChannel(m.GuildID)
+
+			if ok == false {
+				s.ChannelMessageSend(m.ChannelID, "Guild does not have an ideas channel, ask a mod to add one")
+				return
+			}
+
+			idea := strings.TrimPrefix(m.Content, "!addidea")
+			idea = strings.TrimSpace(idea)
+
+			item := modQueueItem{
+				m.Author.ID,
+				fmt.Sprintf("%s#%s", m.Author.Username, m.Author.Discriminator),
+				guild.ID,
+				guild.Name,
+				postingChannelID,
+				idea,
+			}
+
+			data, _ := json.MarshalIndent(item, "", "    ")
+			s.ChannelMessageSend(modQueueChannel.ID, string(data))
+
+			return
+		}
+
+		if userAllowedAdminBotCommands(s, m.GuildID, m.ChannelID, m.Author.ID) {
 			if strings.HasPrefix(m.Content, "!test") {
 				s.ChannelMessageSend(m.ChannelID, "ACK")
 				return
@@ -253,6 +386,16 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 					s.ChannelMessageSend(m.ChannelID, "Will stop tracking user count on this guild. o7")
 				} else {
 					s.ChannelMessageSend(m.ChannelID, "Guild already not tracked. o7")
+				}
+
+				return
+			}
+
+			if strings.HasPrefix(m.Content, "!ideas") {
+				if setupIdeasChannel(s, m.ChannelID, m.Author) {
+					s.ChannelMessageSend(m.ChannelID, "Is now Ideas channel. o7")
+				} else {
+					s.ChannelMessageSend(m.ChannelID, "Channel already ideas for guild. o7")
 				}
 
 				return
@@ -298,7 +441,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			}
 
 			if strings.HasPrefix(m.Content, "!usercount") {
-				guild, _ := s.State.Guild(m.GuildID)
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Current user count: %d", guild.MemberCount))
 				return
 			}
@@ -349,6 +491,40 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 }
 
+func hasGuildIdeasChannel(guildID string) (bool, string) {
+	row := queryIdeasChannelForGuild.QueryRow(guildID)
+	var channelID string
+	err := row.Scan(&channelID)
+	if err == sql.ErrNoRows {
+		return false, ""
+	}
+
+	return true, channelID
+}
+
+func setupIdeasChannel(s *discordgo.Session, channelID string, user *discordgo.User) bool {
+	channel, _ := s.State.Channel(channelID)
+	guild, _ := s.State.Guild(channel.GuildID)
+
+	if ok, _ := hasGuildIdeasChannel(guild.ID); ok {
+		return false
+	}
+
+	data := discordgo.ChannelEdit{
+		Topic: "Use the command !addidea in any channel to post ideas, these will be added once a mod has reviewed them",
+	}
+
+	_, err := s.ChannelEditComplex(channelID, &data)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	insertIdeasChannel.Exec(guild.ID, channel.ID)
+	fmt.Printf("Setup ideas '%s'(%s) in '%s', requested by %s#%s\n", channel.Name, channel.ID, guild.Name, user.Username, user.Discriminator)
+
+	return true
+}
+
 func sendPoliceDM(s *discordgo.Session, user *discordgo.User, guild *discordgo.Guild, channel *discordgo.Channel, event string, reason string) {
 	dm, err := s.UserChannelCreate(user.ID)
 	if err == nil {
@@ -356,7 +532,7 @@ func sendPoliceDM(s *discordgo.Session, user *discordgo.User, guild *discordgo.G
 	}
 }
 
-func userAllowedBotCommands(s *discordgo.Session, guildID string, channelID string, userID string) bool {
+func userAllowedAdminBotCommands(s *discordgo.Session, guildID string, channelID string, userID string) bool {
 	perm, _ := s.State.UserChannelPermissions(userID, channelID)
 	hasPerm := perm&discordgo.PermissionAdministrator != 0
 	hasRole := false
