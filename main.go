@@ -152,8 +152,12 @@ func updateInfoChannel() {
 			continue
 		}
 
+		guild, err := discord.State.Guild(guildID)
+		if err != nil {
+			fmt.Println("Err: Couldn't find guild with ID", guildID)
+			continue
+		}
 		channel, _ := discord.State.Channel(channelID)
-		guild, _ := discord.State.Guild(guildID)
 
 		sb.WriteString(fmt.Sprintf("- #%s in '%s'\n", channel.Name, guild.Name))
 	}
@@ -171,8 +175,12 @@ func updateInfoChannel() {
 			continue
 		}
 
+		guild, err := discord.State.Guild(guildID)
+		if err != nil {
+			fmt.Println("Err: Couldn't find guild with ID", guildID)
+			continue
+		}
 		channel, _ := discord.State.Channel(postChannelID)
-		guild, _ := discord.State.Guild(guildID)
 
 		sb.WriteString(fmt.Sprintf("- %s (posting in #%s)\n", guild.Name, channel.Name))
 	}
@@ -190,8 +198,12 @@ func updateInfoChannel() {
 			continue
 		}
 
+		guild, err := discord.State.Guild(guildID)
+		if err != nil {
+			fmt.Println("Err: Couldn't find guild with ID", guildID)
+			continue
+		}
 		channel, _ := discord.State.Channel(channelID)
-		guild, _ := discord.State.Guild(guildID)
 
 		sb.WriteString(fmt.Sprintf("- %s (posting in #%s)\n", guild.Name, channel.Name))
 	}
@@ -214,9 +226,11 @@ func cronSetup() {
 }
 
 func init() {
+	token = os.Getenv("VPBOT_TOKEN")
+	adminGuildID = os.Getenv("VPBOT_ADMINGUILD_ID")
 
-	flag.StringVar(&token, "t", "", "Bot Token")
-	flag.StringVar(&adminGuildID, "a", "", "Admin Guild")
+	flag.StringVar(&token, "t", token, "Bot Token")
+	flag.StringVar(&adminGuildID, "a", adminGuildID, "Admin Guild ID")
 	flag.BoolVar(&verbose, "v", false, "Verbose Output")
 	flag.Parse()
 }
@@ -399,6 +413,36 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	if strings.HasPrefix(m.Content, "!") {
+		if strings.HasPrefix(m.Content, "!help") {
+			var sb strings.Builder
+
+			user := m.Author
+			if len(m.Mentions) > 0 {
+				user = m.Mentions[0]
+			}
+
+			sb.WriteString("Following commands are available to ")
+			sb.WriteString(user.Mention())
+			sb.WriteString(";\n")
+
+			if userAllowedAdminBotCommands(s, m.GuildID, m.ChannelID, user.ID) {
+				sb.WriteString("`!test` - Will make bot say 'ACK'\n")
+				sb.WriteString("`!usertrack` - Tell VPBot to track the user count of this guild an post weekly updates (every sunday at 3pm UTC) to this channel\n")
+				sb.WriteString("`!useruntrack` - Tell VPBot to stop tracking the user count of this guild\n")
+				sb.WriteString("`!addmathsentence` - Will add a math related sentence that VPBot can say, make sure to make them about hating math\n")
+				sb.WriteString("`!ideas` - Setup the channel to be where ideas added with !addideas are posted after moderation\n")
+				sb.WriteString("`!police` - Setup channel to be policed (only messages containing links or attachments are allowed), messages not furfilling criteria will be deleted and a message will be sent to the offending user about why\n")
+				sb.WriteString("`!unpolice` - Remove this channel from the policing list\n")
+				sb.WriteString("`!policeinfo` - Shows what channels are being policed at the moment\n")
+				sb.WriteString("`!usercount` - Will post the current user count for this guild\n")
+			} else {
+				sb.WriteString("`!addidea` - Suggest an idea to add to the server's idea channel, will go into a manual review queue before being posted\n")
+			}
+
+			s.ChannelMessageSend(m.ChannelID, sb.String())
+			return
+		}
+
 		if strings.HasPrefix(m.Content, "!addidea") {
 			ok, postingChannelID := hasGuildIdeasChannel(m.GuildID)
 
@@ -486,7 +530,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				return
 			}
 
-			if strings.HasPrefix(m.Content, "!info") {
+			if strings.HasPrefix(m.Content, "!policeinfo") {
 				rows, _ := queryAllPoliceChannelForGuild.Query(m.GuildID)
 				defer rows.Close()
 
