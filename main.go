@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
-	"github.com/jasonlvhit/gocron"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"os"
@@ -14,7 +13,6 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
-	"time"
 )
 
 var (
@@ -62,169 +60,6 @@ type userTrackChannel struct {
 	postChannelID string
 }
 
-func postUserGraph() {
-	tracked := make([]userTrackChannel, 0)
-
-	rows, err := queryAllUserTrackChannel.Query()
-	if err != nil {
-		fmt.Println("ERR TRYING TO DO USER GRAPH!", err)
-		return
-	}
-
-	for rows.Next() {
-		var (
-			guildID       string
-			postChannelID string
-		)
-
-		if err := rows.Scan(&guildID, &postChannelID); err != nil {
-			fmt.Println("ERR TRYING TO DO USER GRAPH!", err)
-			return
-		}
-
-		tracked = append(tracked, userTrackChannel{guildID, postChannelID})
-	}
-	rows.Close()
-
-	for _, t := range tracked {
-		guild, err := discord.Guild(t.guildID)
-		if err != nil {
-			fmt.Println("ERR TRYING TO GET GUILD!", t.guildID, err)
-			return
-		}
-
-		now := time.Now().UTC()
-		year, week := now.ISOWeek()
-
-		insertUserTrackData.Exec(guild.ID, week, year, guild.MemberCount)
-
-		lastYear := year
-		lastWeek := week
-		if lastWeek-1 <= 0 {
-			lastYear--
-		} else {
-			lastWeek--
-		}
-
-		var lastWeekUserCount int
-
-		row := queryUserTrackDataByGuildAndDate.QueryRow(guild.ID, lastWeek, lastYear)
-		err = row.Scan(&lastWeekUserCount)
-		if err == sql.ErrNoRows {
-			discord.ChannelMessageSend(t.postChannelID, fmt.Sprintf("User count in week %v: %v", week, guild.MemberCount))
-			return
-		}
-
-		diff := guild.MemberCount - lastWeekUserCount
-
-		percent := float32(diff) / float32(lastWeekUserCount) * 100
-
-		symbol := "up"
-		if percent < 0 {
-			symbol = "down"
-		}
-
-		discord.ChannelMessageSend(t.postChannelID, fmt.Sprintf("User count in week %v %v: %v (%s %v%%)", week, year, guild.MemberCount, symbol, percent))
-	}
-}
-
-func updateInfoChannel() {
-	if infoChannel == nil {
-		return
-	}
-
-	var sb strings.Builder
-
-	sb.WriteString("Currently part of these guilds: \n")
-	for _, g := range discord.State.Guilds {
-		sb.WriteString(fmt.Sprintf(" - %s | %s\n", g.Name, g.ID))
-	}
-
-	sb.WriteString("\nPolicing these channels: \n")
-	rows, _ := queryAllIdeasChannel.Query()
-	for rows.Next() {
-		var (
-			guildID   string
-			channelID string
-		)
-
-		if err := rows.Scan(&guildID, &channelID); err != nil {
-			continue
-		}
-
-		guild, err := discord.State.Guild(guildID)
-		if err != nil {
-			fmt.Println("Err: Couldn't find guild with ID", guildID)
-			continue
-		}
-		channel, _ := discord.State.Channel(channelID)
-
-		sb.WriteString(fmt.Sprintf("- #%s in '%s'\n", channel.Name, guild.Name))
-	}
-	rows.Close()
-
-	sb.WriteString("\nTracking users for these guilds: \n")
-	rows, _ = queryAllUserTrackChannel.Query()
-	for rows.Next() {
-		var (
-			guildID       string
-			postChannelID string
-		)
-
-		if err := rows.Scan(&guildID, &postChannelID); err != nil {
-			continue
-		}
-
-		guild, err := discord.State.Guild(guildID)
-		if err != nil {
-			fmt.Println("Err: Couldn't find guild with ID", guildID)
-			continue
-		}
-		channel, _ := discord.State.Channel(postChannelID)
-
-		sb.WriteString(fmt.Sprintf("- %s (posting in #%s)\n", guild.Name, channel.Name))
-	}
-	rows.Close()
-
-	sb.WriteString("\nTracking ideas for these guilds: \n")
-	rows, _ = queryAllIdeasChannel.Query()
-	for rows.Next() {
-		var (
-			guildID   string
-			channelID string
-		)
-
-		if err := rows.Scan(&guildID, &channelID); err != nil {
-			continue
-		}
-
-		guild, err := discord.State.Guild(guildID)
-		if err != nil {
-			fmt.Println("Err: Couldn't find guild with ID", guildID)
-			continue
-		}
-		channel, _ := discord.State.Channel(channelID)
-
-		sb.WriteString(fmt.Sprintf("- %s (posting in #%s)\n", guild.Name, channel.Name))
-	}
-	rows.Close()
-
-	// Post message
-	messages, _ := discord.ChannelMessages(infoChannel.ID, 1, "", "", "")
-	if len(messages) < 1 {
-		discord.ChannelMessageSend(infoChannel.ID, sb.String())
-	} else {
-		m := messages[0]
-		discord.ChannelMessageEdit(m.ChannelID, m.ID, sb.String())
-	}
-}
-
-func cronSetup() {
-	gocron.Every(1).Sunday().At("15:00").DoSafely(postUserGraph)
-	gocron.Every(2).Minutes().From(gocron.NextTick()).DoSafely(updateInfoChannel)
-	<-gocron.Start()
-}
-
 func init() {
 	token = os.Getenv("VPBOT_TOKEN")
 	adminGuildID = os.Getenv("VPBOT_ADMINGUILD_ID")
@@ -248,13 +83,7 @@ func (l discordLogger) Write(p []byte) (n int, err error) {
 	return 0, e
 }
 
-func main() {
-	if token == "" {
-		fmt.Println("No token provided. Please run: vpbot -t <bot token>")
-		os.Exit(1)
-	}
-
-	urlRegex, _ = regexp.Compile(urlRegexString)
+func setupDatabase() {
 	db, _ := sql.Open("sqlite3", "./vpbot.db")
 
 	db.Exec("CREATE TABLE IF NOT EXISTS police_channels (id INTEGER PRIMARY KEY, guild_id TEXT, channel_id TEXT)")
@@ -285,6 +114,16 @@ func main() {
 	deleteIdeasChannel, _ = db.Prepare("DELETE FROM ideas_channel WHERE channel_id = ?")
 	queryIdeasChannelForGuild, _ = db.Prepare("SELECT channel_id FROM ideas_channel WHERE guild_id = ?")
 	queryAllIdeasChannel, _ = db.Prepare("SELECT guild_id, channel_id FROM ideas_channel")
+}
+
+func main() {
+	if token == "" {
+		fmt.Println("No token provided. Please run: vpbot -t <bot token> or set the VPBOT_TOKEN environment variable")
+		os.Exit(1)
+	}
+
+	urlRegex, _ = regexp.Compile(urlRegexString)
+	setupDatabase()
 
 	var err error
 	discord, err = discordgo.New("Bot " + token)
@@ -314,7 +153,6 @@ func main() {
 		} else {
 			setupAdminGuild(discord, adminGuild)
 		}
-
 	}
 
 	go cronSetup()
@@ -332,25 +170,108 @@ func main() {
 func setupAdminGuild(s *discordgo.Session, guild *discordgo.Guild) {
 	fmt.Println("Setting up channels")
 
-	modQueueChannel = setupTextChannel(guild, "mod-queue")
-	logsChannel = setupTextChannel(guild, "logs")
-	log.SetFlags(log.Lshortfile)
-	logger := discordLogger{
-		session:       discord,
-		logsChannelID: logsChannel.ID,
+	var everyoneRole *discordgo.Role
+	var modRole *discordgo.Role
+
+	for _, r := range guild.Roles {
+		if r.Name == "@everyone" {
+			everyoneRole = r
+		}
+
+		if r.Name == "mod" || r.Name == "Mod" {
+			modRole = r
+		}
 	}
-	log.SetOutput(logger)
-	infoChannel = setupTextChannel(guild, "info")
+
+	var category *discordgo.Channel
+	var err error
+
+	overwrites := []*discordgo.PermissionOverwrite{
+		{
+			ID:    s.State.User.ID,
+			Allow: discordgo.PermissionAll,
+			Type:  "member",
+		},
+		{
+			ID:    modRole.ID,
+			Allow: discordgo.PermissionReadMessages | discordgo.PermissionAddReactions | discordgo.PermissionManageMessages,
+			Type:  "role",
+		},
+		{
+			ID:   everyoneRole.ID,
+			Type: "role",
+			Deny: discordgo.PermissionAll,
+		},
+	}
+
+	for _, c := range guild.Channels {
+		if c.Name == "vpbot" && c.Type == discordgo.ChannelTypeGuildCategory {
+			edit := discordgo.ChannelEdit{
+				PermissionOverwrites: overwrites,
+			}
+			category, err = s.ChannelEditComplex(c.ID, &edit)
+			if err != nil {
+				log.Println("Could not edit the VPBot category for administration", err)
+				return
+			}
+		}
+	}
+	if category == nil {
+		categoryData := discordgo.GuildChannelCreateData{
+			Name:                 "vpbot",
+			Type:                 discordgo.ChannelTypeGuildCategory,
+			PermissionOverwrites: overwrites,
+		}
+
+		category, err = s.GuildChannelCreateComplex(guild.ID, categoryData)
+		if err != nil {
+			log.Println("Could not setup the VPBot category for administration", err)
+			return
+		}
+	}
+
+	modQueueChannel = setupTextChannel(s, guild, "mod-queue", category.ID)
+	logsChannel = setupTextChannel(s, guild, "logs", category.ID)
+	if logsChannel != nil {
+		log.SetFlags(log.Lshortfile)
+		logger := discordLogger{
+			session:       discord,
+			logsChannelID: logsChannel.ID,
+		}
+		log.SetOutput(logger)
+	}
+	infoChannel = setupTextChannel(s, guild, "info", category.ID)
 }
 
-func setupTextChannel(guild *discordgo.Guild, name string) *discordgo.Channel {
+func setupTextChannel(s *discordgo.Session, guild *discordgo.Guild, name string, parentID string) *discordgo.Channel {
 	for _, c := range guild.Channels {
-		if c.Name == name {
+		if c.Name == name && c.Type == discordgo.ChannelTypeGuildText {
+			if len(parentID) > 0 && c.ParentID != parentID {
+				edit := discordgo.ChannelEdit{
+					ParentID: parentID,
+				}
+
+				channel, err := s.ChannelEditComplex(c.ID, &edit)
+				if err != nil {
+					log.Println("Could not edit", name, err)
+				}
+				return channel
+			}
+
 			return c
 		}
 	}
 
-	newChannel, _ := discord.GuildChannelCreate(guild.ID, name, discordgo.ChannelTypeGuildText)
+	data := discordgo.GuildChannelCreateData{
+		Name:     name,
+		Type:     discordgo.ChannelTypeGuildText,
+		ParentID: parentID,
+	}
+
+	newChannel, err := s.GuildChannelCreateComplex(guild.ID, data)
+	if err != nil {
+		log.Println("Could not create", name, err)
+	}
 	return newChannel
 }
 
