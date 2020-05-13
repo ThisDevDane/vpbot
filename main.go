@@ -8,11 +8,14 @@ import (
 	"github.com/bwmarrin/discordgo"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 var (
@@ -47,6 +50,13 @@ var (
 	deleteIdeasChannel        *sql.Stmt
 	queryIdeasChannelForGuild *sql.Stmt
 	queryAllIdeasChannel      *sql.Stmt
+
+	insertMessageLogChannel        *sql.Stmt
+	queryMessageLogChannelForGuild *sql.Stmt
+
+	insertGithubChannel        *sql.Stmt
+	queryGithubChannelForGuild *sql.Stmt
+	queryGithubChannelForRepo  *sql.Stmt
 )
 
 var (
@@ -91,29 +101,47 @@ func setupDatabase() {
 	db.Exec("CREATE TABLE IF NOT EXISTS user_track_data (id INTEGER PRIMARY KEY, guild_id TEXT, week_number INT, year INT, user_count INT)")
 	db.Exec("CREATE TABLE IF NOT EXISTS math_sentence (id INTEGER PRIMARY KEY, sentence TEXT)")
 	db.Exec("CREATE TABLE IF NOT EXISTS ideas_channel (id INTEGER PRIMARY KEY, guild_id TEXT, channel_id TEXT)")
+	db.Exec("CREATE TABLE IF NOT EXISTS msglog_channel (id INTEGER PRIMARY KEY, guild_id TEXT, channel_id TEXT)")
+	db.Exec("CREATE TABLE IF NOT EXISTS github_channel (id INTEGER PRIMARY KEY, guild_id TEXT, channel_id TEXT, role_id TEXT, repo_id TEXT)")
 
-	insertPoliceChannel, _ = db.Prepare("INSERT INTO police_channels (guild_id, channel_id) VALUES (?, ?)")
-	deletePoliceChannel, _ = db.Prepare("DELETE FROM police_channels WHERE channel_id = ?")
-	queryPoliceChannel, _ = db.Prepare("SELECT guild_id, channel_id FROM police_channels WHERE channel_id = ?")
-	queryAllPoliceChannelForGuild, _ = db.Prepare("SELECT channel_id FROM police_channels WHERE guild_id = ?")
-	queryAllPoliceChannel, _ = db.Prepare("SELECT guild_id, channel_id FROM police_channels")
+	insertPoliceChannel = dbPrepare(db, "INSERT INTO police_channels (guild_id, channel_id) VALUES (?, ?)")
+	deletePoliceChannel = dbPrepare(db, "DELETE FROM police_channels WHERE channel_id = ?")
+	queryPoliceChannel = dbPrepare(db, "SELECT guild_id, channel_id FROM police_channels WHERE channel_id = ?")
+	queryAllPoliceChannelForGuild = dbPrepare(db, "SELECT channel_id FROM police_channels WHERE guild_id = ?")
+	queryAllPoliceChannel = dbPrepare(db, "SELECT guild_id, channel_id FROM police_channels")
 
-	insertUserTrackChannel, _ = db.Prepare("INSERT INTO user_track_channel (guild_id, post_channel_id) VALUES (?, ?)")
-	queryAllUserTrackChannel, _ = db.Prepare("SELECT guild_id, post_channel_id FROM user_track_channel")
-	queryUserTrackChannel, _ = db.Prepare("SELECT guild_id, post_channel_id FROM user_track_channel WHERE guild_id = ?")
-	deleteUserTrackChannel, _ = db.Prepare("DELETE FROM user_track_channel WHERE guild_id = ?")
+	insertUserTrackChannel = dbPrepare(db, "INSERT INTO user_track_channel (guild_id, post_channel_id) VALUES (?, ?)")
+	queryAllUserTrackChannel = dbPrepare(db, "SELECT guild_id, post_channel_id FROM user_track_channel")
+	queryUserTrackChannel = dbPrepare(db, "SELECT guild_id, post_channel_id FROM user_track_channel WHERE guild_id = ?")
+	deleteUserTrackChannel = dbPrepare(db, "DELETE FROM user_track_channel WHERE guild_id = ?")
 
-	insertUserTrackData, _ = db.Prepare("INSERT INTO user_track_data (guild_id, week_number, year, user_count) VALUES (?, ?, ?, ?)")
-	queryUserTrackDataByGuild, _ = db.Prepare("SELECT guild_id, week_number, year, user_count FROM user_track_data WHERE guild_id = ?")
-	queryUserTrackDataByGuildAndDate, _ = db.Prepare("SELECT user_count FROM user_track_data WHERE guild_id = ? AND week_number = ? AND year = ?")
+	insertUserTrackData = dbPrepare(db, "INSERT INTO user_track_data (guild_id, week_number, year, user_count) VALUES (?, ?, ?, ?)")
+	queryUserTrackDataByGuild = dbPrepare(db, "SELECT guild_id, week_number, year, user_count FROM user_track_data WHERE guild_id = ?")
+	queryUserTrackDataByGuildAndDate = dbPrepare(db, "SELECT user_count FROM user_track_data WHERE guild_id = ? AND week_number = ? AND year = ?")
 
-	queryRandomMathSentence, _ = db.Prepare("SELECT sentence FROM math_sentence ORDER BY random() LIMIT 1")
-	insertRandomMathSentence, _ = db.Prepare("INSERT INTO math_sentence (sentence) VALUES (?)")
+	queryRandomMathSentence = dbPrepare(db, "SELECT sentence FROM math_sentence ORDER BY random() LIMIT 1")
+	insertRandomMathSentence = dbPrepare(db, "INSERT INTO math_sentence (sentence) VALUES (?)")
 
-	insertIdeasChannel, _ = db.Prepare("INSERT INTO ideas_channel (guild_id, channel_id) VALUES (?, ?)")
-	deleteIdeasChannel, _ = db.Prepare("DELETE FROM ideas_channel WHERE channel_id = ?")
-	queryIdeasChannelForGuild, _ = db.Prepare("SELECT channel_id FROM ideas_channel WHERE guild_id = ?")
-	queryAllIdeasChannel, _ = db.Prepare("SELECT guild_id, channel_id FROM ideas_channel")
+	insertIdeasChannel = dbPrepare(db, "INSERT INTO ideas_channel (guild_id, channel_id) VALUES (?, ?)")
+	deleteIdeasChannel = dbPrepare(db, "DELETE FROM ideas_channel WHERE channel_id = ?")
+	queryIdeasChannelForGuild = dbPrepare(db, "SELECT channel_id FROM ideas_channel WHERE guild_id = ?")
+	queryAllIdeasChannel = dbPrepare(db, "SELECT guild_id, channel_id FROM ideas_channel")
+
+	insertMessageLogChannel = dbPrepare(db, "INSERT INTO msglog_channel (guild_id, channel_id) VALUES (?, ?)")
+	queryMessageLogChannelForGuild = dbPrepare(db, "SELECT channel_id FROM msglog_channel WHERE guild_id = ?")
+
+	insertGithubChannel = dbPrepare(db, "INSERT INTO github_channel (guild_id, channel_id, repo_id, role_id) VALUES (?, ?, ?, ?)")
+	queryGithubChannelForGuild = dbPrepare(db, "SELECT channel_id FROM github_channel WHERE guild_id = ?")
+	queryGithubChannelForRepo = dbPrepare(db, "SELECT channel_id, role_id FROM github_channel WHERE repo_id = ?")
+}
+
+func dbPrepare(db *sql.DB, query string) *sql.Stmt {
+	stmt, err := db.Prepare(query)
+	if err != nil {
+		log.Println(err)
+	}
+
+	return stmt
 }
 
 func main() {
@@ -133,8 +161,10 @@ func main() {
 	}
 
 	discord.StateEnabled = true
+	// discord.State.MaxMessageCount = 200
 
 	discord.AddHandler(messageCreate)
+	// discord.AddHandler(messageDelete)
 	discord.AddHandler(messageReactionAdd)
 
 	err = discord.Open()
@@ -157,6 +187,10 @@ func main() {
 
 	go cronSetup()
 
+	setupHTTP()
+	log.Println("Starting HTTP server...")
+	go http.ListenAndServe(":13373", nil)
+
 	fmt.Println("VPBot is now running.  Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
@@ -165,6 +199,50 @@ func main() {
 
 	discord.Close()
 
+}
+
+func setupHTTP() {
+	log.Println("Setting up HTTP handlers")
+	http.HandleFunc("/github-webhook", githubWebhookHandler)
+	http.HandleFunc("/ack", ackHandler)
+}
+
+func ackHandler(w http.ResponseWriter, req *http.Request) {
+	fmt.Fprintf(w, "ACK")
+}
+func githubWebhookHandler(w http.ResponseWriter, req *http.Request) {
+	decoder := json.NewDecoder(req.Body)
+	var data map[string]interface{}
+	err := decoder.Decode(&data)
+	if err != nil {
+		log.Panic(err)
+		return
+	}
+
+	if data["action"].(string) != "completed" {
+		return
+	}
+
+	if data["check_run"].(map[string]interface{})["check_suite"].(map[string]interface{})["head_branch"].(string) != "master" {
+		return
+	}
+
+	if data["check_run"].(map[string]interface{})["conclusion"].(string) != "failure" {
+		return
+	}
+
+	repoIDfloat := data["repository"].(map[string]interface{})["id"].(float64)
+	repoIDint := int(repoIDfloat)
+	repoID := strconv.Itoa(repoIDint)
+
+	chanID, roleID, ok := repoHasGithubChannel(repoID)
+	if ok == false {
+		return
+
+	}
+
+	msg := fmt.Sprintf("CI is failing again... Somebody messed up... Wonder who... *eyes BDFL* %s", roleID)
+	discord.ChannelMessageSend(chanID, msg)
 }
 
 func setupAdminGuild(s *discordgo.Session, guild *discordgo.Guild) {
@@ -321,6 +399,49 @@ func messageReactionAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 	}
 }
 
+// func messageUpdate(s *discordgo.Session, m *discordgo.MessageUpdate) {
+// }
+
+// func messageDelete(s *discordgo.Session, m *discordgo.MessageDelete) {
+// 	channelID, ok := guildHasMessageLog(m.GuildID)
+// 	if ok == false {
+// 		return
+// 	}
+
+// 	channel, _ := s.State.Channel(m.ChannelID)
+// 	guild, _ := s.State.Guild(m.GuildID)
+// 	log.Printf("Logging message delete in '%s'-'%s'", channel.Name, guild.Name)
+
+// 	cTime, _ := snowflakeCreationTime(m.ID)
+
+// 	msg, found := s.State.Message(m.ChannelID, m.ID)
+// 	var sb strings.Builder
+// 	if found != nil {
+// 		sb.WriteString(fmt.Sprintf("Message with ID '%s' was deleted from '#%s' but it was not present in cache(%s), it was from '%v'", m.ID, channel.Name, found.Error(), cTime))
+// 		sb.WriteRune('\n')
+// 	} else {
+// 		sb.WriteString("Message by ")
+// 		sb.WriteString(msg.Author.Mention())
+// 		sb.WriteString(" was deleted: ")
+// 		sb.WriteRune('\n')
+// 		sb.WriteString(msg.Content)
+// 		sb.WriteRune('\n')
+// 	}
+
+// 	beforeMsgs, _ := s.ChannelMessages(m.ChannelID, 1, "", "", m.ID)
+// 	sb.WriteString("Context: ")
+// 	sb.WriteString(fmt.Sprintf("https://discordapp.com/channels/%s/%s/%s", m.GuildID, m.ChannelID, beforeMsgs[0].ID))
+
+// 	response := discordgo.MessageSend{
+// 		Content: sb.String(),
+// 	}
+
+// 	_, err := s.ChannelMessageSendComplex(channelID, &response)
+// 	if err != nil {
+// 		log.Printf("Error sending message to msglog, %v", err)
+// 	}
+// }
+
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author.ID == s.State.User.ID {
 		return
@@ -356,6 +477,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				sb.WriteString("`!unpolice` - Remove this channel from the policing list\n")
 				sb.WriteString("`!policeinfo` - Shows what channels are being policed at the moment\n")
 				sb.WriteString("`!usercount` - Will post the current user count for this guild\n")
+				sb.WriteString("`!githubchan` - Setup a channel as a github channel for webhooks messages\n")
 			} else {
 				sb.WriteString("`!addidea` - Suggest an idea to add to the server's idea channel, will go into a manual review queue before being posted\n")
 			}
@@ -485,6 +607,27 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				return
 			}
 
+			if strings.HasPrefix(m.Content, "!msglog") {
+				if setupMessageLogChannel(s, m.ChannelID, m.Author) {
+					s.ChannelMessageSend(m.ChannelID, "Using channel as message log. o7")
+				} else {
+					s.ChannelMessageSend(m.ChannelID, "Guild already has a msglog. o7")
+				}
+				return
+			}
+
+			if strings.HasPrefix(m.Content, "!githubchan") {
+				msg := strings.TrimPrefix(m.Content, "!githubchan")
+				msg = strings.TrimSpace(msg)
+				parts := strings.Split(msg, " ")
+				if setupGithubChannel(s, m.ChannelID, parts[0], parts[1], m.Author) {
+					s.ChannelMessageSend(m.ChannelID, "Using channel as github channel. o7")
+				} else {
+					s.ChannelMessageSend(m.ChannelID, "Guild already has a github channel. o7")
+				}
+				return
+			}
+
 			return
 		}
 	}
@@ -531,6 +674,29 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 }
 
+func repoHasGithubChannel(repoID string) (string, string, bool) {
+	row := queryGithubChannelForRepo.QueryRow(repoID)
+	var channelID string
+	var roleMention string
+	err := row.Scan(&channelID, &roleMention)
+	if err == sql.ErrNoRows {
+		return "", "", false
+	}
+
+	return channelID, roleMention, true
+}
+
+func guildHasMessageLog(guildID string) (string, bool) {
+	row := queryMessageLogChannelForGuild.QueryRow(guildID)
+	var channelID string
+	err := row.Scan(&channelID)
+	if err == sql.ErrNoRows {
+		return "", false
+	}
+
+	return channelID, true
+}
+
 func hasGuildIdeasChannel(guildID string) (bool, string) {
 	row := queryIdeasChannelForGuild.QueryRow(guildID)
 	var channelID string
@@ -540,6 +706,47 @@ func hasGuildIdeasChannel(guildID string) (bool, string) {
 	}
 
 	return true, channelID
+}
+
+func setupGithubChannel(s *discordgo.Session, channelID string, repoID string, roleID string, user *discordgo.User) bool {
+	channel, _ := s.State.Channel(channelID)
+	guild, _ := s.State.Guild(channel.GuildID)
+
+	if ok, _ := guildHasGithubChannel(guild.ID); ok {
+		log.Printf("%s#%s tried to github channel in '%s' but guild '%s' already has one\n", user.Username, user.Discriminator, channel.Name, guild.Name)
+		return false
+	}
+
+	insertGithubChannel.Exec(guild.ID, channel.ID, repoID, roleID)
+	log.Printf("Setup github channel '%s'(%s) in '%s', requested by %s#%s\n", channel.Name, channel.ID, guild.Name, user.Username, user.Discriminator)
+
+	return true
+}
+
+func guildHasGithubChannel(guildID string) (bool, string) {
+	row := queryGithubChannelForGuild.QueryRow(guildID)
+	var channelID string
+	err := row.Scan(&channelID)
+	if err == sql.ErrNoRows {
+		return false, ""
+	}
+
+	return true, channelID
+}
+
+func setupMessageLogChannel(s *discordgo.Session, channelID string, user *discordgo.User) bool {
+	channel, _ := s.State.Channel(channelID)
+	guild, _ := s.State.Guild(channel.GuildID)
+
+	if _, ok := guildHasMessageLog(guild.ID); ok {
+		log.Printf("%s#%s tried to setup msglog in '%s' but guild '%s' already has one\n", user.Username, user.Discriminator, channel.Name, guild.Name)
+		return false
+	}
+
+	insertMessageLogChannel.Exec(guild.ID, channel.ID)
+	log.Printf("Setup msglog '%s'(%s) in '%s', requested by %s#%s\n", channel.Name, channel.ID, guild.Name, user.Username, user.Discriminator)
+
+	return true
 }
 
 func setupIdeasChannel(s *discordgo.Session, channelID string, user *discordgo.User) bool {
@@ -638,6 +845,16 @@ func unpoliceChannel(s *discordgo.Session, channelID string, user *discordgo.Use
 	}
 
 	return false
+}
+
+func snowflakeCreationTime(ID string) (t time.Time, err error) {
+	i, err := strconv.ParseInt(ID, 10, 64)
+	if err != nil {
+		return
+	}
+	timestamp := (i >> 22) + 1420070400000
+	t = time.Unix(timestamp/1000, 0)
+	return
 }
 
 const urlRegexString string = `(?:(?:https?|ftp):\/\/|\b(?:[a-z\d]+\.))(?:(?:[^\s()<>]+|\((?:[^\s()<>]+|(?:\([^\s()<>]+\)))?\))+(?:\((?:[^\s()<>]+|(?:\(?:[^\s()<>]+\)))?\)|[^\s!()\[\]{};:'".,<>?«»“”‘’]))?`
