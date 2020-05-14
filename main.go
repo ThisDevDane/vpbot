@@ -252,7 +252,9 @@ func githubWebhookHandler(w http.ResponseWriter, req *http.Request) {
 
 	}
 
-	msg := fmt.Sprintf("CI is failing again... Somebody messed up... Wonder who... *eyes BDFL* %s", roleID)
+	jobName := data["check_run"].(map[string]interface{})["name"].(string)
+
+	msg := fmt.Sprintf("CI job '%s' is failing again... Somebody messed up... Wonder who... *eyes BDFL* %s", jobName, roleID)
 	discord.ChannelMessageSend(chanID, msg)
 }
 
