@@ -211,6 +211,11 @@ func ackHandler(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(w, "ACK")
 }
 func githubWebhookHandler(w http.ResponseWriter, req *http.Request) {
+	event := req.Header.Get("X-Github-Event")
+	if event != "check_run" {
+		return
+	}
+
 	decoder := json.NewDecoder(req.Body)
 	var data map[string]interface{}
 	err := decoder.Decode(&data)
