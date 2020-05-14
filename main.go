@@ -22,6 +22,7 @@ var (
 	token        string
 	verbose      bool
 	adminGuildID string
+	httpPort     int
 
 	urlRegex *regexp.Regexp
 	db       *sql.DB
@@ -73,10 +74,13 @@ type userTrackChannel struct {
 func init() {
 	token = os.Getenv("VPBOT_TOKEN")
 	adminGuildID = os.Getenv("VPBOT_ADMINGUILD_ID")
+	verbose, _ = strconv.ParseBool(os.Getenv("VPBOT_VERBOSE"))
+	httpPort, _ = strconv.Atoi(os.Getenv("VPBOT_HTTP_PORT"))
 
 	flag.StringVar(&token, "t", token, "Bot Token")
 	flag.StringVar(&adminGuildID, "a", adminGuildID, "Admin Guild ID")
 	flag.BoolVar(&verbose, "v", false, "Verbose Output")
+	flag.IntVar(&httpPort, "p", 13373, "HTTP port")
 	flag.Parse()
 }
 
@@ -188,13 +192,15 @@ func main() {
 	go cronSetup()
 
 	setupHTTP()
-	log.Println("Starting HTTP server...")
-	go http.ListenAndServe(":13373", nil)
+	log.Printf("Starting HTTP server on port %d...\n", httpPort)
+	go http.ListenAndServe(fmt.Sprintf(":%d", httpPort), nil)
 
+	log.Println("VPBot is now running.")
 	fmt.Println("VPBot is now running.  Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
+	log.Println("VPBot is terminating...")
 	fmt.Println("VPBot is terminating...")
 
 	discord.Close()
