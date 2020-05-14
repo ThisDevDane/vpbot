@@ -293,11 +293,13 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 			for _, h := range commandMap {
 				if h.modOnly == false || userAllowedAdminBotCommands(s, m.GuildID, m.ChannelID, user.ID) {
-					sb.WriteString("`!")
-					sb.WriteString(h.commandString)
-					sb.WriteString("` ")
-					sb.WriteString(h.description)
-					sb.WriteString("\n")
+					if len(h.description) > 0 {
+						sb.WriteString("`!")
+						sb.WriteString(h.commandString)
+						sb.WriteString("` ")
+						sb.WriteString(h.description)
+						sb.WriteString("\n")
+					}
 				}
 			}
 
