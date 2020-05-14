@@ -166,6 +166,8 @@ func updateInfoChannel() {
 		discord.ChannelMessageSend(infoChannel.ID, sb.String())
 	} else {
 		m := messages[0]
+		now := time.Now()
+		sb.WriteString("\n\nLast edit: %s", now.String())
 		discord.ChannelMessageEdit(m.ChannelID, m.ID, sb.String())
 	}
 }
