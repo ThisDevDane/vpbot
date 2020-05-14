@@ -72,7 +72,7 @@ func postUserTrackingInfo() {
 			symbol = "down"
 		}
 
-		discord.ChannelMessageSend(t.postChannelID, fmt.Sprintf("User count in week %v %v: %v (%s %v%%)", week, year, guild.MemberCount, symbol, percent))
+		discord.ChannelMessageSend(t.postChannelID, fmt.Sprintf("User count in week %v %v: %v (%s %v%%) (last week: %v)", week, year, guild.MemberCount, symbol, percent, lastWeekUserCount))
 	}
 }
 
