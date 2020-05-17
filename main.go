@@ -99,8 +99,9 @@ func main() {
 	discord.AddHandler(messageCreate)
 	discord.AddHandler(ideasQueueReactionAdd)
 
-	handleCommand("ack", "Will make bot say 'ACK'", true, discordAckHandler)
-	handleCommand("help", "Will print a message with all available commands to the user", true, helpHandler)
+	handleCommand("ack", "Will make bot say 'ACK'", false, discordAckHandler)
+	handleCommand("help", "Will print a message with all available commands to the user", false, helpHandler)
+	handleCommand("version", "Will print the version of VPBot", false, versionCommandHandler)
 
 	handleCommand("usercount", "Post the current user count for this guild", true, userCountCommandHandler)
 	handleCommand("usertrack", "Tell VPBot to track the user count of this guild an post weekly updates (every sunday at 3pm UTC) to this channel", true, addUserTrackingHandler)
