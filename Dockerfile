@@ -6,7 +6,8 @@ FROM golang:latest as builder
 # Add Maintainer Info
 LABEL maintainer="Mikkel Hjortshoej <hoej@northwolfprod.com>"
 
-ARG GIT_COMMIT="DEV"
+ARG GIT_COMMIT=DEV
+ARG BUILD_TIME=DEV
 
 # Set the Current Working Directory inside the container
 WORKDIR /app
@@ -21,7 +22,7 @@ RUN go mod download
 COPY . .
 
 # Build the Go app
-RUN go build -ldflags "-X main.versionStr=$GIT_COMMIT" -o vpbot .
+RUN go build -ldflags "-X main.versionStr=$GIT_COMMIT main.buildTimeStr=$BUILD_TIME" -o vpbot .
 
 # Command to run the executable
 ENTRYPOINT ["./vpbot"] 
