@@ -22,7 +22,7 @@ RUN go mod download
 COPY . .
 
 # Build the Go app
-RUN go build -ldflags "-X main.versionStr=$GIT_COMMIT main.buildTimeStr=$BUILD_TIME" -o vpbot .
+RUN go build -ldflags "-X main.versionStr=$GIT_COMMIT -X main.buildTimeStr=$BUILD_TIME" -o vpbot .
 
 # Command to run the executable
 ENTRYPOINT ["./vpbot"] 
