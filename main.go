@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
+	"github.com/jasonlvhit/gocron"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"net/http"
@@ -27,36 +28,6 @@ var (
 	db       *sql.DB
 
 	discord *discordgo.Session
-
-	insertPoliceChannel           *sql.Stmt
-	queryPoliceChannel            *sql.Stmt
-	deletePoliceChannel           *sql.Stmt
-	queryAllPoliceChannelForGuild *sql.Stmt
-	queryAllPoliceChannel         *sql.Stmt
-
-	insertUserTrackChannel   *sql.Stmt
-	deleteUserTrackChannel   *sql.Stmt
-	queryAllUserTrackChannel *sql.Stmt
-	queryUserTrackChannel    *sql.Stmt
-
-	insertUserTrackData              *sql.Stmt
-	queryUserTrackDataByGuild        *sql.Stmt
-	queryUserTrackDataByGuildAndDate *sql.Stmt
-
-	queryRandomMathSentence  *sql.Stmt
-	insertRandomMathSentence *sql.Stmt
-
-	insertIdeasChannel        *sql.Stmt
-	deleteIdeasChannel        *sql.Stmt
-	queryIdeasChannelForGuild *sql.Stmt
-	queryAllIdeasChannel      *sql.Stmt
-
-	insertMessageLogChannel        *sql.Stmt
-	queryMessageLogChannelForGuild *sql.Stmt
-
-	insertGithubChannel        *sql.Stmt
-	queryGithubChannelForGuild *sql.Stmt
-	queryGithubChannelForRepo  *sql.Stmt
 )
 
 type userTrackChannel struct {
@@ -90,48 +61,6 @@ func (l discordLogger) Write(p []byte) (n int, err error) {
 	return 0, e
 }
 
-func setupDatabase() {
-	db, _ := sql.Open("sqlite3", "./vpbot.db")
-
-	db.Exec("CREATE TABLE IF NOT EXISTS police_channels (id INTEGER PRIMARY KEY, guild_id TEXT, channel_id TEXT)")
-	db.Exec("CREATE TABLE IF NOT EXISTS user_track_channel (id INTEGER PRIMARY KEY, guild_id TEXT, post_channel_id TEXT)")
-	db.Exec("CREATE TABLE IF NOT EXISTS user_track_data (id INTEGER PRIMARY KEY, guild_id TEXT, week_number INT, year INT, user_count INT)")
-	db.Exec("CREATE TABLE IF NOT EXISTS math_sentence (id INTEGER PRIMARY KEY, sentence TEXT)")
-	db.Exec("CREATE TABLE IF NOT EXISTS ideas_channel (id INTEGER PRIMARY KEY, guild_id TEXT, channel_id TEXT)")
-	db.Exec("CREATE TABLE IF NOT EXISTS msglog_channel (id INTEGER PRIMARY KEY, guild_id TEXT, channel_id TEXT)")
-	db.Exec("CREATE TABLE IF NOT EXISTS github_channel (id INTEGER PRIMARY KEY, guild_id TEXT, channel_id TEXT, role_id TEXT, repo_id TEXT)")
-
-	insertPoliceChannel = dbPrepare(db, "INSERT INTO police_channels (guild_id, channel_id) VALUES (?, ?)")
-	deletePoliceChannel = dbPrepare(db, "DELETE FROM police_channels WHERE channel_id = ?")
-	queryPoliceChannel = dbPrepare(db, "SELECT guild_id, channel_id FROM police_channels WHERE channel_id = ?")
-	queryAllPoliceChannelForGuild = dbPrepare(db, "SELECT channel_id FROM police_channels WHERE guild_id = ?")
-	queryAllPoliceChannel = dbPrepare(db, "SELECT guild_id, channel_id FROM police_channels")
-
-	insertUserTrackChannel = dbPrepare(db, "INSERT INTO user_track_channel (guild_id, post_channel_id) VALUES (?, ?)")
-	queryAllUserTrackChannel = dbPrepare(db, "SELECT guild_id, post_channel_id FROM user_track_channel")
-	queryUserTrackChannel = dbPrepare(db, "SELECT guild_id, post_channel_id FROM user_track_channel WHERE guild_id = ?")
-	deleteUserTrackChannel = dbPrepare(db, "DELETE FROM user_track_channel WHERE guild_id = ?")
-
-	insertUserTrackData = dbPrepare(db, "INSERT INTO user_track_data (guild_id, week_number, year, user_count) VALUES (?, ?, ?, ?)")
-	queryUserTrackDataByGuild = dbPrepare(db, "SELECT guild_id, week_number, year, user_count FROM user_track_data WHERE guild_id = ?")
-	queryUserTrackDataByGuildAndDate = dbPrepare(db, "SELECT user_count FROM user_track_data WHERE guild_id = ? AND week_number = ? AND year = ?")
-
-	queryRandomMathSentence = dbPrepare(db, "SELECT sentence FROM math_sentence ORDER BY random() LIMIT 1")
-	insertRandomMathSentence = dbPrepare(db, "INSERT INTO math_sentence (sentence) VALUES (?)")
-
-	insertIdeasChannel = dbPrepare(db, "INSERT INTO ideas_channel (guild_id, channel_id) VALUES (?, ?)")
-	deleteIdeasChannel = dbPrepare(db, "DELETE FROM ideas_channel WHERE channel_id = ?")
-	queryIdeasChannelForGuild = dbPrepare(db, "SELECT channel_id FROM ideas_channel WHERE guild_id = ?")
-	queryAllIdeasChannel = dbPrepare(db, "SELECT guild_id, channel_id FROM ideas_channel")
-
-	insertMessageLogChannel = dbPrepare(db, "INSERT INTO msglog_channel (guild_id, channel_id) VALUES (?, ?)")
-	queryMessageLogChannelForGuild = dbPrepare(db, "SELECT channel_id FROM msglog_channel WHERE guild_id = ?")
-
-	insertGithubChannel = dbPrepare(db, "INSERT INTO github_channel (guild_id, channel_id, repo_id, role_id) VALUES (?, ?, ?, ?)")
-	queryGithubChannelForGuild = dbPrepare(db, "SELECT channel_id FROM github_channel WHERE guild_id = ?")
-	queryGithubChannelForRepo = dbPrepare(db, "SELECT channel_id, role_id FROM github_channel WHERE repo_id = ?")
-}
-
 func dbPrepare(db *sql.DB, query string) *sql.Stmt {
 	stmt, err := db.Prepare(query)
 	if err != nil {
@@ -148,9 +77,20 @@ func main() {
 	}
 
 	urlRegex, _ = regexp.Compile(urlRegexString)
-	setupDatabase()
-
 	var err error
+	db, err = sql.Open("sqlite3", "./vpbot.db")
+
+	if err != nil {
+		log.Panic(err)
+	}
+
+	initPoliceChannel(db)
+	initMathSentence(db)
+	initUserTracking(db)
+	initIdeasChannel(db)
+	initGithubChannel(db)
+	initInfo()
+
 	discord, err = discordgo.New("Bot " + token)
 	if err != nil {
 		fmt.Println("error creating Discord session,", err)
@@ -163,6 +103,7 @@ func main() {
 	discord.AddHandler(ideasQueueReactionAdd)
 
 	handleCommand("ack", "Will make bot say 'ACK'", true, discordAckHandler)
+	handleCommand("help", "Will print a message with all available commands to the user", true, helpHandler)
 
 	handleCommand("usercount", "Post the current user count for this guild", true, userCountCommandHandler)
 	handleCommand("usertrack", "Tell VPBot to track the user count of this guild an post weekly updates (every sunday at 3pm UTC) to this channel", true, addUserTrackingHandler)
@@ -203,7 +144,7 @@ func main() {
 	go http.ListenAndServe(fmt.Sprintf(":%d", httpPort), nil)
 
 	log.Println("Starting CRON services...")
-	go cronSetup()
+	<-gocron.Start()
 
 	log.Println("VPBot is now running.")
 	fmt.Println("VPBot is now running.  Press CTRL-C to exit.")
@@ -254,6 +195,33 @@ func discordAckHandler(session *discordgo.Session, msg *discordgo.MessageCreate)
 	session.ChannelMessageSend(msg.ChannelID, "ACK")
 }
 
+func helpHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
+	var sb strings.Builder
+
+	user := msg.Author
+	if len(msg.Mentions) > 0 {
+		user = msg.Mentions[0]
+	}
+
+	sb.WriteString("Following commands are available to ")
+	sb.WriteString(user.Mention())
+	sb.WriteString(";\n")
+
+	for _, h := range commandMap {
+		if h.modOnly == false || userAllowedAdminBotCommands(s, m.GuildID, m.ChannelID, user.ID) {
+			if len(h.description) > 0 {
+				sb.WriteString("`!")
+				sb.WriteString(h.commandString)
+				sb.WriteString("` ")
+				sb.WriteString(h.description)
+				sb.WriteString("\n")
+			}
+		}
+	}
+
+	session.ChannelMessageSend(m.ChannelID, sb.String())
+}
+
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author.ID == s.State.User.ID {
 		return
@@ -276,34 +244,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			}
 
 			handler.handleFunc(s, m)
-			return
-		}
-
-		if strings.HasPrefix(m.Content, "!help") {
-			var sb strings.Builder
-
-			user := m.Author
-			if len(m.Mentions) > 0 {
-				user = m.Mentions[0]
-			}
-
-			sb.WriteString("Following commands are available to ")
-			sb.WriteString(user.Mention())
-			sb.WriteString(";\n")
-
-			for _, h := range commandMap {
-				if h.modOnly == false || userAllowedAdminBotCommands(s, m.GuildID, m.ChannelID, user.ID) {
-					if len(h.description) > 0 {
-						sb.WriteString("`!")
-						sb.WriteString(h.commandString)
-						sb.WriteString("` ")
-						sb.WriteString(h.description)
-						sb.WriteString("\n")
-					}
-				}
-			}
-
-			s.ChannelMessageSend(m.ChannelID, sb.String())
 			return
 		}
 	}

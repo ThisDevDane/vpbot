@@ -7,6 +7,27 @@ import (
 	"log"
 )
 
+var (
+	insertPoliceChannel           *sql.Stmt
+	queryPoliceChannel            *sql.Stmt
+	deletePoliceChannel           *sql.Stmt
+	queryAllPoliceChannelForGuild *sql.Stmt
+	queryAllPoliceChannel         *sql.Stmt
+)
+
+func initPoliceChannel(db *sql.DB) {
+	_, err := db.Exec("CREATE TABLE IF NOT EXISTS police_channels (id INTEGER PRIMARY KEY, guild_id TEXT, channel_id TEXT)")
+	if err != nil {
+		log.Panic(err)
+	}
+
+	insertPoliceChannel = dbPrepare(db, "INSERT INTO police_channels (guild_id, channel_id) VALUES (?, ?)")
+	deletePoliceChannel = dbPrepare(db, "DELETE FROM police_channels WHERE channel_id = ?")
+	queryPoliceChannel = dbPrepare(db, "SELECT guild_id, channel_id FROM police_channels WHERE channel_id = ?")
+	queryAllPoliceChannelForGuild = dbPrepare(db, "SELECT channel_id FROM police_channels WHERE guild_id = ?")
+	queryAllPoliceChannel = dbPrepare(db, "SELECT guild_id, channel_id FROM police_channels")
+}
+
 func addPoliceChannelHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
 	if policeChannel(session, msg.ChannelID, msg.Author) {
 		session.ChannelMessageSend(msg.ChannelID, "Policing channel. o7")

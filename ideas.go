@@ -9,6 +9,13 @@ import (
 	"strings"
 )
 
+var (
+	insertIdeasChannel        *sql.Stmt
+	deleteIdeasChannel        *sql.Stmt
+	queryIdeasChannelForGuild *sql.Stmt
+	queryAllIdeasChannel      *sql.Stmt
+)
+
 type modQueueItem struct {
 	AuthorID         string `json:authorID`
 	AuthorName       string `json:authorName`
@@ -16,6 +23,18 @@ type modQueueItem struct {
 	GuildName        string `json:guildName`
 	PostingChannelID string `json:postingChannelID`
 	Content          string `json:content`
+}
+
+func initIdeasChannel(db *sql.DB) {
+	_, err := db.Exec("CREATE TABLE IF NOT EXISTS ideas_channel (id INTEGER PRIMARY KEY, guild_id TEXT, channel_id TEXT)")
+	if err != nil {
+		log.Panic(err)
+	}
+
+	insertIdeasChannel = dbPrepare(db, "INSERT INTO ideas_channel (guild_id, channel_id) VALUES (?, ?)")
+	deleteIdeasChannel = dbPrepare(db, "DELETE FROM ideas_channel WHERE channel_id = ?")
+	queryIdeasChannelForGuild = dbPrepare(db, "SELECT channel_id FROM ideas_channel WHERE guild_id = ?")
+	queryAllIdeasChannel = dbPrepare(db, "SELECT guild_id, channel_id FROM ideas_channel")
 }
 
 func setupIdeasHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {

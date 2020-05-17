@@ -11,6 +11,23 @@ import (
 	"strings"
 )
 
+var (
+	insertGithubChannel        *sql.Stmt
+	queryGithubChannelForGuild *sql.Stmt
+	queryGithubChannelForRepo  *sql.Stmt
+)
+
+func initGithubChannel(db *sql.DB) {
+	_, err := db.Exec("CREATE TABLE IF NOT EXISTS github_channel (id INTEGER PRIMARY KEY, guild_id TEXT, channel_id TEXT, role_id TEXT, repo_id TEXT)")
+	if err != nil {
+		log.Panic(err)
+	}
+
+	insertGithubChannel = dbPrepare(db, "INSERT INTO github_channel (guild_id, channel_id, repo_id, role_id) VALUES (?, ?, ?, ?)")
+	queryGithubChannelForGuild = dbPrepare(db, "SELECT channel_id FROM github_channel WHERE guild_id = ?")
+	queryGithubChannelForRepo = dbPrepare(db, "SELECT channel_id, role_id FROM github_channel WHERE repo_id = ?")
+}
+
 func githubWebhookHandler(w http.ResponseWriter, req *http.Request) {
 	event := req.Header.Get("X-Github-Event")
 	if event != "check_run" {
