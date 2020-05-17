@@ -6,6 +6,8 @@ FROM golang:latest as builder
 # Add Maintainer Info
 LABEL maintainer="Mikkel Hjortshoej <hoej@northwolfprod.com>"
 
+ARG GIT_COMMIT="DEV"
+
 # Set the Current Working Directory inside the container
 WORKDIR /app
 
