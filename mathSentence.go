@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/bwmarrin/discordgo"
 	"log"
 	"strings"
@@ -22,7 +23,36 @@ func initMathSentence(db *sql.DB) {
 	insertRandomMathSentence = dbPrepare(db, "INSERT INTO math_sentence (sentence) VALUES (?)")
 }
 
-func addMathSentence(session *discordgo.Session, msg *discordgo.MessageCreate) {
+func msgStreamMathMessageHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
+	if len(msg.Mentions) > 0 {
+		for _, mention := range msg.Mentions {
+			if mention.ID == session.State.User.ID {
+				str := strings.ToLower(msg.Content)
+				if strings.Contains(str, "math") {
+
+					var sentence string
+					row := queryRandomMathSentence.QueryRow()
+					err := row.Scan(&sentence)
+					if err == sql.ErrNoRows {
+						sentence = "MATH IS THE WORST THING ON EARH"
+					}
+
+					recepient := msg.Author
+
+					if len(msg.Mentions) > 1 {
+						recepient = msg.Mentions[1]
+					}
+
+					resp := fmt.Sprintf("%s %s", recepient.Mention(), sentence)
+					session.ChannelMessageSend(msg.ChannelID, resp)
+				}
+				break
+			}
+		}
+	}
+}
+
+func addMathSentenceHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
 	sentence := strings.TrimPrefix(msg.Content, "!addmathsentence")
 	sentence = strings.TrimSpace(sentence)
 	if len(sentence) <= 1 {

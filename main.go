@@ -28,11 +28,21 @@ var (
 	db       *sql.DB
 
 	discord *discordgo.Session
+
+	commandMap            = make(map[string]commandHandler)
+	messageStreamHandlers = make([]func(*discordgo.Session, *discordgo.MessageCreate), 0)
 )
 
 type userTrackChannel struct {
 	guildID       string
 	postChannelID string
+}
+
+type commandHandler struct {
+	commandString string
+	description   string
+	modOnly       bool
+	handleFunc    func(*discordgo.Session, *discordgo.MessageCreate)
 }
 
 func init() {
@@ -46,19 +56,6 @@ func init() {
 	flag.BoolVar(&verbose, "v", false, "Verbose Output")
 	flag.IntVar(&httpPort, "p", 13373, "HTTP port")
 	flag.Parse()
-}
-
-type discordLogger struct {
-	session       *discordgo.Session
-	logsChannelID string
-}
-
-func (l discordLogger) Write(p []byte) (n int, err error) {
-	_, e := l.session.ChannelMessageSend(l.logsChannelID, string(p))
-	if e == nil {
-		return len(p), nil
-	}
-	return 0, e
 }
 
 func dbPrepare(db *sql.DB, query string) *sql.Stmt {
@@ -118,7 +115,10 @@ func main() {
 
 	handleCommand("githubchan", "Setup a channel as a github channel for webhooks messages", true, githubCommandHandler)
 
-	handleCommand("addmathsentence", "Will add a math related sentence that VPBot can say, make sure to make them about hating math", false, addMathSentence)
+	handleCommand("addmathsentence", "Will add a math related sentence that VPBot can say, make sure to make them about hating math", false, addMathSentenceHandler)
+
+	addMessageStreamHandler(msgStreamMathMessageHandler)
+	addMessageStreamHandler(msgStreamPoliceHandler)
 
 	log.Println("Opening up connection to discord...")
 	err = discord.Open()
@@ -168,14 +168,9 @@ func ackHandler(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(w, "ACK")
 }
 
-type commandHandler struct {
-	commandString string
-	description   string
-	modOnly       bool
-	handleFunc    func(*discordgo.Session, *discordgo.MessageCreate)
+func addMessageStreamHandler(handler func(*discordgo.Session, *discordgo.MessageCreate)) {
+	messageStreamHandlers = append(messageStreamHandlers, handler)
 }
-
-var commandMap = make(map[string]commandHandler)
 
 func handleCommand(cmdString string, desc string, modOnly bool, handler func(*discordgo.Session, *discordgo.MessageCreate)) {
 	if _, ok := commandMap[cmdString]; ok == false {
@@ -208,7 +203,7 @@ func helpHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
 	sb.WriteString(";\n")
 
 	for _, h := range commandMap {
-		if h.modOnly == false || userAllowedAdminBotCommands(s, m.GuildID, m.ChannelID, user.ID) {
+		if h.modOnly == false || userAllowedAdminBotCommands(session, msg.GuildID, msg.ChannelID, user.ID) {
 			if len(h.description) > 0 {
 				sb.WriteString("`!")
 				sb.WriteString(h.commandString)
@@ -219,7 +214,7 @@ func helpHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
 		}
 	}
 
-	session.ChannelMessageSend(m.ChannelID, sb.String())
+	session.ChannelMessageSend(msg.ChannelID, sb.String())
 }
 
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -248,45 +243,8 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 	}
 
-	if isChannelPoliced(m.ChannelID) {
-		urlInMessage := urlRegex.MatchString(m.Content)
-
-		if len(m.Attachments) <= 0 && len(m.Embeds) <= 0 && urlInMessage == false {
-			guild, _ := s.State.Guild(m.GuildID)
-			channel, _ := s.State.Channel(m.ChannelID)
-			log.Printf("[%s|%s] Message did not furfill requirements! deleting message (%s) from %s#%s\n", guild.Name, channel.Name, m.ID, m.Author.Username, m.Author.Discriminator)
-			s.ChannelMessageDelete(channel.ID, m.ID)
-			sendPoliceDM(s, m.Author, guild, channel, "Message was deleted", "Showcase messages require that either you include a link or a picture/file in your message, if you believe your message has been wrongfully deleted, please contact a mod.\n If you wish to chat about showcase, please look for a #showcase-banter channel")
-		}
-
-		return
-	}
-
-	if len(m.Mentions) > 0 {
-		for _, mention := range m.Mentions {
-			if mention.ID == s.State.User.ID {
-				str := strings.ToLower(m.Content)
-				if strings.Contains(str, "math") {
-
-					var sentence string
-					row := queryRandomMathSentence.QueryRow()
-					err := row.Scan(&sentence)
-					if err == sql.ErrNoRows {
-						sentence = "MATH IS THE WORST THING ON EARH"
-					}
-
-					recepient := m.Author
-
-					if len(m.Mentions) > 1 {
-						recepient = m.Mentions[1]
-					}
-
-					msg := fmt.Sprintf("%s %s", recepient.Mention(), sentence)
-					s.ChannelMessageSend(m.ChannelID, msg)
-				}
-				break
-			}
-		}
+	for _, h := range messageStreamHandlers {
+		h(s, m)
 	}
 }
 
