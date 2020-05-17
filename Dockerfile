@@ -19,7 +19,7 @@ RUN go mod download
 COPY . .
 
 # Build the Go app
-RUN go build -ldflags "-X main.versionStr=$github.sha" -o vpbot .
+RUN go build -ldflags "-X main.versionStr=$GIT_COMMIT" -o vpbot .
 
 # Command to run the executable
 ENTRYPOINT ["./vpbot"] 
