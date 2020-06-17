@@ -87,6 +87,6 @@ import "core:mem"
 import "core:strings"
 
 main :: proc() {
-	REPLACE_ME
+	REPLACE_ME;
 }
 `
