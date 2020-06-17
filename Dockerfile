@@ -7,6 +7,7 @@ RUN apt-get update && \
   llvm \
   git \
   make \
+  clang  \
   apt-transport-https \
   ca-certificates \
   && rm -rf /var/lib/apt/lists/*
