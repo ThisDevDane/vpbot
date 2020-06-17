@@ -6,7 +6,10 @@ RUN apt-get update && \
   apt-get install -y --no-install-recommends \
   llvm \
   git \
+  apt-transport-https \
+  ca-certificates \
   && rm -rf /var/lib/apt/lists/*
+RUN update-ca-certificates
 
 RUN git clone https://github.com/odin-lang/Odin.git
 RUN cd Odin && make release
