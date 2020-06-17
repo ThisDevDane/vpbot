@@ -6,6 +6,7 @@ RUN apt-get update && \
   apt-get install -y --no-install-recommends \
   llvm \
   git \
+  make \
   apt-transport-https \
   ca-certificates \
   && rm -rf /var/lib/apt/lists/*
@@ -36,6 +37,7 @@ RUN go mod download
 COPY . .
 COPY --from=ODINBUILDER /Odin/core/ core/
 COPY --from=ODINBUILDER /Odin/odin .
+ENV PATH="/app:${PATH}"
 
 # Build the Go app
 RUN go build -ldflags "-X main.versionStr=$GIT_COMMIT -X main.buildTimeStr=$BUILD_TIME" -o vpbot .
