@@ -36,6 +36,7 @@ RUN go mod download
 RUN apt-get update && \
   apt-get install -y --no-install-recommends \
   llvm \
+  clang \
   && rm -rf /var/lib/apt/lists/*
 
 # Copy the source from the current directory to the Working Directory inside the container
