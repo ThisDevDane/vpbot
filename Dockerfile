@@ -24,7 +24,11 @@ COPY . .
 # Build the Go app
 RUN go build -ldflags "-X main.versionStr=$GIT_COMMIT -X main.buildTimeStr=$BUILD_TIME" -o vpbot .
 
-RUN apt install odin
+# From https://github.com/docker-library/golang
+RUN apt-get update && \
+  apt-get install -y --no-install-recommends \
+  odin \
+  && rm -rf /var/lib/apt/lists/*
 
 # Command to run the executable
 ENTRYPOINT ["./vpbot"] 
