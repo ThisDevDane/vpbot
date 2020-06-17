@@ -238,7 +238,8 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		cmd := strings.TrimPrefix(message[0], "!")
 		if handler, ok := commandMap[cmd]; ok {
 			if handler.modOnly && userAllowedAdminBotCommands(s, m.GuildID, m.ChannelID, m.Author.ID) == false {
-				s.ChannelMessageSend(m.ChannelID, "You are not allowed to use this command! SHAME ON YOU!")
+				log.Printf("User %s tried to use command %s but is not allowed (not a MOD)", m.Author.String(), cmd)
+				s.ChannelMessageSend(m.ChannelID, "Sorry, but we're not that type of friends </3")
 				return
 			}
 
