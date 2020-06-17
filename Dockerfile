@@ -24,5 +24,7 @@ COPY . .
 # Build the Go app
 RUN go build -ldflags "-X main.versionStr=$GIT_COMMIT -X main.buildTimeStr=$BUILD_TIME" -o vpbot .
 
+RUN apt install odin
+
 # Command to run the executable
 ENTRYPOINT ["./vpbot"] 
