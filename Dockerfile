@@ -5,6 +5,7 @@ FROM ubuntu:latest as ODINBUILDER
 RUN apt-get update && \
   apt-get install -y --no-install-recommends \
   llvm \
+  git \
   && rm -rf /var/lib/apt/lists/*
 
 RUN git clone https://github.com/odin-lang/Odin.git
