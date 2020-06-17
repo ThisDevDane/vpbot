@@ -236,13 +236,25 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if strings.HasPrefix(m.Content, "!") {
 		message := strings.SplitN(m.Content, " ", 2)
 		cmd := strings.TrimPrefix(message[0], "!")
+
+		if verbose {
+			log.Printf("Trying to find %s command for %s", cmd, m.Author.String())
+		}
+
 		if handler, ok := commandMap[cmd]; ok {
+			if verbose {
+				log.Printf("Found %s command for %s", cmd, m.Author.String())
+			}
+
 			if handler.modOnly && userAllowedAdminBotCommands(s, m.GuildID, m.ChannelID, m.Author.ID) == false {
 				log.Printf("User %s tried to use command %s but is not allowed (not a MOD)", m.Author.String(), cmd)
 				s.ChannelMessageSend(m.ChannelID, "Sorry, but we're not that type of friends </3")
 				return
 			}
 
+			if verbose {
+				log.Printf("Running %s command handler for %s", cmd, m.Author.String())
+			}
 			handler.handleFunc(s, m)
 			return
 		}
