@@ -87,6 +87,7 @@ func main() {
 	initIdeasChannel(db)
 	initGithubChannel(db)
 	initInfo()
+	initOdin()
 
 	discord, err = discordgo.New("Bot " + token)
 	if err != nil {
@@ -117,6 +118,8 @@ func main() {
 	handleCommand("githubchan", "Setup a channel as a github channel for webhooks messages", true, githubCommandHandler)
 
 	handleCommand("addmathsentence", "Will add a math related sentence that VPBot can say, make sure to make them about hating math", false, addMathSentenceHandler)
+
+	handleCommand("odinrun", "Will compile an odin code block and run it", true, odinRunHandle)
 
 	addMessageStreamHandler(msgStreamMathMessageHandler)
 	addMessageStreamHandler(msgStreamPoliceHandler)
