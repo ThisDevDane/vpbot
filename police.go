@@ -35,7 +35,7 @@ func msgStreamPoliceHandler(session *discordgo.Session, msg *discordgo.MessageCr
 		if len(msg.Attachments) <= 0 && len(msg.Embeds) <= 0 && urlInMessage == false {
 			guild, _ := session.State.Guild(msg.GuildID)
 			channel, _ := session.State.Channel(msg.ChannelID)
-			log.Printf("[%s|%s] Message did not furfill requirements! deleting message (%s) from %s#%s\n", guild.Name, channel.Name, msg.ID, msg.Author.Username, msg.Author.Discriminator)
+			log.Printf("[%s|%s] Message did not furfill requirements! deleting message (%s) from %s#%s\n%s", guild.Name, channel.Name, msg.ID, msg.Author.Username, msg.Author.Discriminator, msg.Content)
 			session.ChannelMessageDelete(channel.ID, msg.ID)
 			sendPoliceDM(session, msg.Author, guild, channel, "Message was deleted", "Showcase messages require that either you include a link or a picture/file in your message, if you believe your message has been wrongfully deleted, please contact a mod.\n If you wish to chat about showcase, please look for a #showcase-banter channel")
 		}
