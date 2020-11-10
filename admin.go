@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
+	"log"
+
 	"github.com/bwmarrin/discordgo"
 	_ "github.com/mattn/go-sqlite3"
-	"log"
 )
 
 var (
@@ -14,7 +14,7 @@ var (
 )
 
 func setupAdminGuild(s *discordgo.Session, guild *discordgo.Guild) {
-	fmt.Println("Setting up channels")
+	log.Println("Setting up channels")
 
 	var everyoneRole *discordgo.Role
 	var modRole *discordgo.Role
@@ -77,15 +77,6 @@ func setupAdminGuild(s *discordgo.Session, guild *discordgo.Guild) {
 	}
 
 	modQueueChannel = setupTextChannel(s, guild, "mod-queue", category.ID)
-	logsChannel = setupTextChannel(s, guild, "logs", category.ID)
-	if logsChannel != nil {
-		log.SetFlags(log.Lshortfile)
-		logger := discordLogger{
-			session:       discord,
-			logsChannelID: logsChannel.ID,
-		}
-		log.SetOutput(logger)
-	}
 	infoChannel = setupTextChannel(s, guild, "info", category.ID)
 }
 

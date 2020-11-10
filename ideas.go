@@ -79,9 +79,7 @@ func ideasQueueReactionAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd
 	channel, _ := s.State.Channel(r.ChannelID)
 	user, _ := s.User(r.UserID)
 
-	if verbose {
-		log.Printf("[%s|%s|%s#%s] (%s) Reaction added: %+v\n", guild.Name, channel.Name, user.Username, user.Discriminator, r.MessageID, r.Emoji)
-	}
+	log.Printf("[%s|%s|%s#%s] (%s) Reaction added: %+v\n", guild.Name, channel.Name, user.Username, user.Discriminator, r.MessageID, r.Emoji)
 
 	if r.ChannelID == modQueueChannel.ID {
 		if r.Emoji.Name == "yes" {

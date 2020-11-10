@@ -68,8 +68,10 @@ func dbPrepare(db *sql.DB, query string) *sql.Stmt {
 }
 
 func main() {
+	log.SetFlags(log.Lshortfile)
+
 	if token == "" {
-		fmt.Println("No token provided. Please run: vpbot -t <bot token> or set the VPBOT_TOKEN environment variable")
+		log.Println("No token provided. Please run: vpbot -t <bot token> or set the VPBOT_TOKEN environment variable")
 		os.Exit(1)
 	}
 
@@ -133,7 +135,7 @@ func main() {
 
 	if len(adminGuildID) > 0 {
 		// Setup admin guild
-		fmt.Println("Setting up admin guild")
+		log.Println("Setting up admin guild")
 		adminGuild, err := discord.Guild(adminGuildID)
 
 		if err != nil {
@@ -151,12 +153,10 @@ func main() {
 	<-gocron.Start()
 
 	log.Println("VPBot is now running.")
-	fmt.Println("VPBot is now running.  Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
 	log.Println("VPBot is terminating...")
-	fmt.Println("VPBot is terminating...")
 
 	discord.Close()
 
@@ -229,22 +229,16 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	guild, _ := s.State.Guild(m.GuildID)
 	channel, _ := s.State.Channel(m.ChannelID)
 
-	if verbose {
-		log.Printf("[%s|%s|%s#%s] (%s) %s\n", guild.Name, channel.Name, m.Author.Username, m.Author.Discriminator, m.ID, m.Content)
-	}
+	log.Printf("[%s|%s|%s#%s] (%s) %s\n", guild.Name, channel.Name, m.Author.Username, m.Author.Discriminator, m.ID, m.Content)
 
 	if strings.HasPrefix(m.Content, "!") {
 		message := strings.SplitN(m.Content, " ", 2)
 		cmd := strings.TrimPrefix(message[0], "!")
 
-		if verbose {
-			log.Printf("Trying to find %s command for %s", cmd, m.Author.String())
-		}
+		log.Printf("Trying to find %s command for %s", cmd, m.Author.String())
 
 		if handler, ok := commandMap[cmd]; ok {
-			if verbose {
-				log.Printf("Found %s command for %s", cmd, m.Author.String())
-			}
+			log.Printf("Found %s command for %s", cmd, m.Author.String())
 
 			if handler.modOnly && userAllowedAdminBotCommands(s, m.GuildID, m.ChannelID, m.Author.ID) == false {
 				log.Printf("User %s tried to use command %s but is not allowed (not a MOD)", m.Author.String(), cmd)
@@ -252,9 +246,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				return
 			}
 
-			if verbose {
-				log.Printf("Running %s command handler for %s", cmd, m.Author.String())
-			}
+			log.Printf("Running %s command handler for %s", cmd, m.Author.String())
 			handler.handleFunc(s, m)
 			return
 		}
