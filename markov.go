@@ -41,7 +41,7 @@ func markovForceSay(session *discordgo.Session, msg *discordgo.MessageCreate) {
 	sentence := strings.TrimPrefix(content, "!markovsay")
 	sentence = strings.TrimSpace(sentence)
 
-	message := markovGenerateMessage(sentence)
+	message := markovGenerateMessage()
 	session.ChannelMessageSend(msg.ChannelID, message)
 }
 
@@ -52,12 +52,12 @@ func GetMarkovChain() *gomarkov.Chain {
 	err := row.Scan(&model)
 	if err != nil {
 		log.Println("No markov model found in DB, creating fresh one")
-		result = gomarkov.NewChain(1)
+		result = gomarkov.NewChain(2)
 	} else {
 		err = json.Unmarshal([]byte(model), &result)
 		if err != nil {
 			log.Println("Error loading latest markov model in DB, creating fresh one")
-			result = gomarkov.NewChain(1)
+			result = gomarkov.NewChain(2)
 		} else {
 			log.Println("Loaded markov model from DB!")
 		}
@@ -91,12 +91,10 @@ func msgStreamMarkovSayHandler(session *discordgo.Session, msg *discordgo.Messag
 		return
 	}
 
-	content, _ := msg.ContentWithMoreMentionsReplaced(session)
-
 	for _, mention := range msg.Mentions {
 		if mention.ID == session.State.User.ID {
 			if rand.Float32() > 0.75 {
-				markovMsg := markovGenerateMessage(content)
+				markovMsg := markovGenerateMessage()
 				session.ChannelMessageSend(msg.ChannelID, markovMsg)
 				return
 			}
@@ -104,17 +102,14 @@ func msgStreamMarkovSayHandler(session *discordgo.Session, msg *discordgo.Messag
 	}
 
 	if rand.Float32() > 0.95 {
-		markovMsg := markovGenerateMessage(content)
+		markovMsg := markovGenerateMessage()
 		//session.ChannelMessageSend(msg.ChannelID, markovMsg)
 		log.Printf("Markov would have said; %s", markovMsg)
 	}
 }
 
-func markovGenerateMessage(msg string) string {
-	parts := strings.Split(msg, " ")
-	randomWord := parts[rand.Int31n(int32(len(parts)))]
-
-	tokens := []string{randomWord}
+func markovGenerateMessage() string {
+	tokens := []string{gomarkov.StartToken, gomarkov.StartToken}
 	for tokens[len(tokens)-1] != gomarkov.EndToken {
 		next, _ := chain.Generate(tokens[(len(tokens) - 1):])
 		tokens = append(tokens, next)
