@@ -90,12 +90,16 @@ func main() {
 	initGithubChannel(db)
 	initInfo()
 	initOdin()
+	initMarkov(db)
 
 	discord, err = discordgo.New("Bot " + token)
 	if err != nil {
 		fmt.Println("error creating Discord session,", err)
 		os.Exit(1)
 	}
+
+	discord.UpdateStatus(0, "Ruining users lives, one stupid message at a time")
+
 
 	discord.StateEnabled = true
 
@@ -123,9 +127,14 @@ func main() {
 
 	handleCommand("odinrun", "Will compile an odin code block and run it", true, odinRunHandle)
 
+	handleCommand("markovsave", "Force a save of the markov chain", true, markovForceSave)
+	handleCommand("markovsay", "Force a message generation in markov", false, markovForceSay)
+
 	addMessageStreamHandler(msgStreamMathMessageHandler)
 	addMessageStreamHandler(msgStreamPoliceHandler)
 	addMessageStreamHandler(msgStreamGithubMessageHandler)
+	addMessageStreamHandler(msgStreamMarkovTrainHandler)
+	addMessageStreamHandler(msgStreamMarkovSayHandler)
 
 	log.Println("Opening up connection to discord...")
 	err = discord.Open()

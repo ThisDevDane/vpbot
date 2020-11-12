@@ -12,6 +12,8 @@ github.com/jasonlvhit/gocron v0.0.0-20191228163020-98b59b546dee h1:vIYpscVc1753m
 github.com/jasonlvhit/gocron v0.0.0-20191228163020-98b59b546dee/go.mod h1:1nXLkt6gXojCECs34KL3+LlZ3gTpZlkPUA8ejW3WeP0=
 github.com/mattn/go-sqlite3 v2.0.3+incompatible h1:gXHsfypPkaMZrKbD5209QV9jbUTJKjyR5WD3HYQSd+U=
 github.com/mattn/go-sqlite3 v2.0.3+incompatible/go.mod h1:FPy6KqzDD04eiIsT53CuJW3U88zkxoIYsOqkbpncsNc=
+github.com/mb-14/gomarkov v0.0.0-20200824165802-565ae3f3c79f h1:p4Ac4li/dZd6T80ej1W6QpYdFrTO41AWXcRdAfKxD9c=
+github.com/mb-14/gomarkov v0.0.0-20200824165802-565ae3f3c79f/go.mod h1:OHbylrHvts0HSwPw1MdTdzcXPE62nvZoCODbToGnGPo=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/ginkgo v1.10.1/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/gomega v1.7.0/go.mod h1:ex+gbHU/CVuBBDIJjb2X0qEXbFg53c61hWP/1CpauHY=
