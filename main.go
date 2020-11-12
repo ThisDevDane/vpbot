@@ -125,6 +125,7 @@ func main() {
 
 	addMessageStreamHandler(msgStreamMathMessageHandler)
 	addMessageStreamHandler(msgStreamPoliceHandler)
+	addMessageStreamHandler(msgStreamGithubMessageHandler)
 
 	log.Println("Opening up connection to discord...")
 	err = discord.Open()

@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	"log"
+	"math/rand"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -15,7 +17,20 @@ var (
 	insertGithubChannel        *sql.Stmt
 	queryGithubChannelForGuild *sql.Stmt
 	queryGithubChannelForRepo  *sql.Stmt
+
+	shurrupRegex *regexp.Regexp
+
+	snarkyComeback = []string{
+		"Well if you wouldn't keep breaking it, I wouldn't have to yell at you!",
+		"NO! YOU SHURRUP! I HATE U!",
+		"When pigs fly",
+		"Can you you stop breaking things then? hmm? HMMM? >:|",
+		"Oh I'm sorry mister, I'm only pointing out __**your**__ stupid mistakes :)",
+		"Stop yelling, that is __**MY**__ job!",
+	}
 )
+
+const shurrupRegexString = "(?i)shurrup"
 
 func initGithubChannel(db *sql.DB) {
 	_, err := db.Exec("CREATE TABLE IF NOT EXISTS github_channel (id INTEGER PRIMARY KEY, guild_id TEXT, channel_id TEXT, role_id TEXT, repo_id TEXT)")
@@ -26,6 +41,8 @@ func initGithubChannel(db *sql.DB) {
 	insertGithubChannel = dbPrepare(db, "INSERT INTO github_channel (guild_id, channel_id, repo_id, role_id) VALUES (?, ?, ?, ?)")
 	queryGithubChannelForGuild = dbPrepare(db, "SELECT channel_id FROM github_channel WHERE guild_id = ?")
 	queryGithubChannelForRepo = dbPrepare(db, "SELECT channel_id, role_id FROM github_channel WHERE repo_id = ?")
+
+	shurrupRegex, _ = regexp.Compile(shurrupRegexString)
 }
 
 func githubWebhookHandler(w http.ResponseWriter, req *http.Request) {
@@ -69,6 +86,13 @@ func githubWebhookHandler(w http.ResponseWriter, req *http.Request) {
 
 	msg := fmt.Sprintf("CI job '%s' is failing again... Somebody messed up... Wonder who... *eyes BDFL* (commit: %s) %s", jobName, commitSha, roleID)
 	discord.ChannelMessageSend(chanID, msg)
+}
+
+func msgStreamGithubMessageHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
+	if shurrupRegex.MatchString(msg.Content) {
+		resp := fmt.Sprintf("%s %s", msg.Author.Mention(), snarkyComeback[rand.Int31n(int32(len(snarkyComeback)))])
+		session.ChannelMessageSend(msg.ChannelID, resp)
+	}
 }
 
 func githubCommandHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
