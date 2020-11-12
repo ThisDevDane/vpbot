@@ -82,7 +82,7 @@ func msgStreamMarkovTrainHandler(session *discordgo.Session, msg *discordgo.Mess
 	}
 
 	data := strings.Split(content, " ")
-	log.Printf("Adding %v to chain", data)
+	//log.Printf("Adding %v to chain", data)
 	chain.Add(data)
 }
 
@@ -105,7 +105,8 @@ func msgStreamMarkovSayHandler(session *discordgo.Session, msg *discordgo.Messag
 
 	if rand.Float32() > 0.95 {
 		markovMsg := markovGenerateMessage(content)
-		session.ChannelMessageSend(msg.ChannelID, markovMsg)
+		//session.ChannelMessageSend(msg.ChannelID, markovMsg)
+		log.Printf("Markov would have said; %s", markovMsg)
 	}
 }
 
