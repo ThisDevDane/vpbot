@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log"
-	"math/rand"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -91,21 +90,21 @@ func msgStreamMarkovSayHandler(session *discordgo.Session, msg *discordgo.Messag
 		return
 	}
 
-	for _, mention := range msg.Mentions {
-		if mention.ID == session.State.User.ID {
-			if rand.Float32() > 0.75 {
-				markovMsg := markovGenerateMessage()
-				session.ChannelMessageSend(msg.ChannelID, markovMsg)
-				return
-			}
-		}
-	}
+	//for _, mention := range msg.Mentions {
+	//	if mention.ID == session.State.User.ID {
+	//		if rand.Float32() > 0.75 {
+	//			markovMsg := markovGenerateMessage()
+	//			session.ChannelMessageSend(msg.ChannelID, markovMsg)
+	//			return
+	//		}
+	//	}
+	//}
 
-	if rand.Float32() > 0.95 {
-		markovMsg := markovGenerateMessage()
-		//session.ChannelMessageSend(msg.ChannelID, markovMsg)
-		log.Printf("Markov would have said; %s", markovMsg)
-	}
+	//if rand.Float32() > 0.95 {
+	//	markovMsg := markovGenerateMessage()
+	//	//session.ChannelMessageSend(msg.ChannelID, markovMsg)
+	//	log.Printf("Markov would have said; %s", markovMsg)
+	//}
 }
 
 func markovGenerateMessage() string {
