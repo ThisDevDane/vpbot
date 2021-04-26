@@ -63,6 +63,13 @@ func githubWebhookHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// If this 'check_run' is running on a PR, we don't wanna notify about failure, this is only meant for master
+	if prs, ok := data["check_run"].(map[string]interface{})["check_suite"].(map[string]interface{})["pull_requests"]; ok == true {
+		if len(prs.([]interface{})) > 0 {
+			return
+		}
+	}
+
 	if data["check_run"].(map[string]interface{})["check_suite"].(map[string]interface{})["head_branch"].(string) != "master" {
 		return
 	}
@@ -82,9 +89,10 @@ func githubWebhookHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	jobName := data["check_run"].(map[string]interface{})["name"].(string)
+	url := data["check_run"].(map[string]interface{})["details_url"].(string)
 	commitSha := data["check_run"].(map[string]interface{})["check_suite"].(map[string]interface{})["head_sha"].(string)
 
-	msg := fmt.Sprintf("CI job '%s' is failing again... Somebody messed up... Wonder who... *eyes BDFL* (commit: %s) %s", jobName, commitSha, roleID)
+	msg := fmt.Sprintf("CI job '%s' is failing again... Somebody messed up... Wonder who... *eyes BDFL* (commit: %s) %s\n Link: %s", jobName, commitSha, roleID, url)
 	discord.ChannelMessageSend(chanID, msg)
 }
 
