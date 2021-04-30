@@ -4,7 +4,8 @@ FROM ubuntu:latest as ODINBUILDER
 
 RUN apt-get update && \
   apt-get install -y --no-install-recommends \
-  llvm \
+  llvm-11 \
+  llvm-11-dev \
   git \
   make \
   clang  \
@@ -13,7 +14,7 @@ RUN apt-get update && \
   && rm -rf /var/lib/apt/lists/*
 RUN update-ca-certificates
 
-RUN git clone https://github.com/odin-lang/Odin.git
+RUN git clone --depth=1 https://github.com/odin-lang/Odin.git
 RUN cd Odin && make release
 
 ###############
