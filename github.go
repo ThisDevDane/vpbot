@@ -4,13 +4,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/bwmarrin/discordgo"
 	"log"
 	"math/rand"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 var (
@@ -38,7 +39,8 @@ func initGithubChannel(db *sql.DB) {
 		log.Panic(err)
 	}
 
-	insertGithubChannel = dbPrepare(db, "INSERT INTO github_channel (guild_id, channel_id, repo_id, role_id) VALUES (?, ?, ?, ?)")
+	insertGithubChannel = dbPrepare(db,
+		"INSERT INTO github_channel (guild_id, channel_id, repo_id, role_id) VALUES (?, ?, ?, ?)")
 	queryGithubChannelForGuild = dbPrepare(db, "SELECT channel_id FROM github_channel WHERE guild_id = ?")
 	queryGithubChannelForRepo = dbPrepare(db, "SELECT channel_id, role_id FROM github_channel WHERE repo_id = ?")
 
@@ -63,22 +65,20 @@ func githubWebhookHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// If this 'check_run' is running on a PR, we don't wanna notify about failure, this is only meant for master
-	if prs, ok := data["check_run"].(map[string]interface{})["check_suite"].(map[string]interface{})["pull_requests"]; ok == true {
-		if len(prs.([]interface{})) > 0 {
-			return
-		}
-	}
-
-	if data["check_run"].(map[string]interface{})["check_suite"].(map[string]interface{})["head_branch"].(string) != "master" {
+	if unwrapJson(data, "repository", "owner", "login").(string) != "odin-lang" {
 		return
 	}
 
-	if data["check_run"].(map[string]interface{})["conclusion"].(string) != "failure" {
+	if unwrapJson(data, "check_run", "check_suite", "head_branch").(string) != "master" {
 		return
 	}
 
-	repoIDfloat := data["repository"].(map[string]interface{})["id"].(float64)
+	if unwrapJson(data, "check_run", "conclusion").(string) != "failure" {
+		return
+	}
+
+
+	repoIDfloat := unwrapJson(data, "repository", "id").(float64)
 	repoIDint := int(repoIDfloat)
 	repoID := strconv.Itoa(repoIDint)
 
@@ -88,12 +88,26 @@ func githubWebhookHandler(w http.ResponseWriter, req *http.Request) {
 
 	}
 
-	jobName := data["check_run"].(map[string]interface{})["name"].(string)
-	url := data["check_run"].(map[string]interface{})["details_url"].(string)
-	commitSha := data["check_run"].(map[string]interface{})["check_suite"].(map[string]interface{})["head_sha"].(string)
 
-	msg := fmt.Sprintf("CI job '%s' is failing again... Somebody messed up... Wonder who... *eyes BDFL* (commit: %s) %s\n Link: %s", jobName, commitSha, roleID, url)
+	jobName := unwrapJson(data, "check_run", "name").(string)
+	url := unwrapJson(data, "check_run", "details_url").(string)
+	commitSha := unwrapJson(data, "check_run", "check_suite", "head_sha").(string)
+
+	msg := fmt.Sprintf("CI job '%s' is failing again... Somebody messed up... Wonder who... *eyes BDFL* (commit: %s) %s\n Link: %s",
+		jobName,
+		commitSha,
+		roleID,
+		url)
 	discord.ChannelMessageSend(chanID, msg)
+}
+
+func unwrapJson(obj map[string]interface{}, keys ...string) interface{} {
+	root := obj
+	for _, k := range keys {
+		root = root[k].(map[string]interface{})
+	}
+
+	return root
 }
 
 func msgStreamGithubMessageHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
@@ -114,17 +128,30 @@ func githubCommandHandler(session *discordgo.Session, msg *discordgo.MessageCrea
 	}
 }
 
-func setupGithubChannel(s *discordgo.Session, channelID string, repoID string, roleID string, user *discordgo.User) bool {
+func setupGithubChannel(s *discordgo.Session,
+	channelID string,
+	repoID string,
+	roleID string,
+	user *discordgo.User) bool {
 	channel, _ := s.State.Channel(channelID)
 	guild, _ := s.State.Guild(channel.GuildID)
 
 	if ok, _ := guildHasGithubChannel(guild.ID); ok {
-		log.Printf("%s#%s tried to github channel in '%s' but guild '%s' already has one\n", user.Username, user.Discriminator, channel.Name, guild.Name)
+		log.Printf("%s#%s tried to github channel in '%s' but guild '%s' already has one\n",
+			user.Username,
+			user.Discriminator,
+			channel.Name,
+			guild.Name)
 		return false
 	}
 
 	insertGithubChannel.Exec(guild.ID, channel.ID, repoID, roleID)
-	log.Printf("Setup github channel '%s'(%s) in '%s', requested by %s#%s\n", channel.Name, channel.ID, guild.Name, user.Username, user.Discriminator)
+	log.Printf("Setup github channel '%s'(%s) in '%s', requested by %s#%s\n",
+		channel.Name,
+		channel.ID,
+		guild.Name,
+		user.Username,
+		user.Discriminator)
 
 	return true
 }
