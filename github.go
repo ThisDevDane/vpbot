@@ -65,10 +65,6 @@ func githubWebhookHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if unwrapJson(data, "repository", "owner", "login").(string) != "odin-lang" {
-		return
-	}
-
 	if unwrapJson(data, "check_run", "check_suite", "head_branch").(string) != "master" {
 		return
 	}
