@@ -4,9 +4,6 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
-	"github.com/bwmarrin/discordgo"
-	"github.com/jasonlvhit/gocron"
-	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"net/http"
 	"os"
@@ -16,6 +13,10 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/bwmarrin/discordgo"
+	"github.com/jasonlvhit/gocron"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var (
@@ -90,7 +91,7 @@ func main() {
 	initGithubChannel(db)
 	initInfo()
 	initOdin()
-	initMarkov(db)
+	//initMarkov(db)
 
 	discord, err = discordgo.New("Bot " + token)
 	if err != nil {
@@ -98,8 +99,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	discord.UpdateStatus(0, "Ruining users lives, one stupid message at a time")
-
+	usd := discordgo.UpdateStatusData{ Status: "Ruining users lives, one stupid message at a time", AFK: false}
+	discord.UpdateStatusComplex(usd)
 
 	discord.StateEnabled = true
 
@@ -127,14 +128,14 @@ func main() {
 
 	handleCommand("odinrun", "Will compile an odin code block and run it", true, odinRunHandle)
 
-	handleCommand("markovsave", "Force a save of the markov chain", true, markovForceSave)
-	handleCommand("markovsay", "Force a message generation in markov", false, markovForceSay)
+	//handleCommand("markovsave", "Force a save of the markov chain", true, markovForceSave)
+	//handleCommand("markovsay", "Force a message generation in markov", false, markovForceSay)
 
 	addMessageStreamHandler(msgStreamMathMessageHandler)
 	addMessageStreamHandler(msgStreamPoliceHandler)
 	addMessageStreamHandler(msgStreamGithubMessageHandler)
-	addMessageStreamHandler(msgStreamMarkovTrainHandler)
-	addMessageStreamHandler(msgStreamMarkovSayHandler)
+	//addMessageStreamHandler(msgStreamMarkovTrainHandler)
+	//addMessageStreamHandler(msgStreamMarkovSayHandler)
 
 	log.Println("Opening up connection to discord...")
 	err = discord.Open()

@@ -36,16 +36,16 @@ func setupAdminGuild(s *discordgo.Session, guild *discordgo.Guild) {
 		{
 			ID:    s.State.User.ID,
 			Allow: discordgo.PermissionAll,
-			Type:  "member",
+			Type:  discordgo.PermissionOverwriteTypeMember,
 		},
 		{
 			ID:    modRole.ID,
-			Allow: discordgo.PermissionReadMessages | discordgo.PermissionAddReactions | discordgo.PermissionManageMessages,
-			Type:  "role",
+			Allow: discordgo.PermissionViewChannel | discordgo.PermissionAddReactions | discordgo.PermissionManageMessages,
+			Type:  discordgo.PermissionOverwriteTypeRole,
 		},
 		{
 			ID:   everyoneRole.ID,
-			Type: "role",
+			Type: discordgo.PermissionOverwriteTypeRole,
 			Deny: discordgo.PermissionAll,
 		},
 	}
