@@ -3,10 +3,11 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"github.com/bwmarrin/discordgo"
-	"github.com/jasonlvhit/gocron"
 	"log"
 	"time"
+
+	"github.com/bwmarrin/discordgo"
+	"github.com/go-co-op/gocron"
 )
 
 var (
@@ -20,7 +21,7 @@ var (
 	queryUserTrackDataByGuildAndDate *sql.Stmt
 )
 
-func initUserTracking(db *sql.DB) {
+func initUserTracking(db *sql.DB, scheduler *gocron.Scheduler) {
 	_, err := db.Exec("CREATE TABLE IF NOT EXISTS user_track_channel (id INTEGER PRIMARY KEY, guild_id TEXT, post_channel_id TEXT)")
 	if err != nil {
 		log.Panic(err)
@@ -40,7 +41,7 @@ func initUserTracking(db *sql.DB) {
 	queryUserTrackDataByGuild = dbPrepare(db, "SELECT guild_id, week_number, year, user_count FROM user_track_data WHERE guild_id = ?")
 	queryUserTrackDataByGuildAndDate = dbPrepare(db, "SELECT user_count FROM user_track_data WHERE guild_id = ? AND week_number = ? AND year = ?")
 
-	gocron.Every(1).Sunday().At("15:00").DoSafely(postUserTrackingInfo)
+	scheduler.Every(1).Sunday().At("15:00").Do(postUserTrackingInfo)
 }
 
 func userCountCommandHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {

@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/jasonlvhit/gocron"
+	"github.com/go-co-op/gocron"
 	"github.com/mb-14/gomarkov"
 )
 
@@ -16,7 +16,7 @@ var (
 	chain               *gomarkov.Chain
 )
 
-func initMarkov(db *sql.DB) {
+func initMarkov(db *sql.DB, scheduler *gocron.Scheduler) {
 	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS markov (id INTEGER PRIMARY KEY, create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, json TEXT)`)
 	if err != nil {
 		log.Panic(err)
@@ -26,7 +26,7 @@ func initMarkov(db *sql.DB) {
 
 	chain = GetMarkovChain()
 
-	gocron.Every(2).Hours().DoSafely(saveMarkovChain)
+	scheduler.Every(2).Hours().Do(saveMarkovChain)
 }
 
 func markovForceSave(session *discordgo.Session, msg *discordgo.MessageCreate) {

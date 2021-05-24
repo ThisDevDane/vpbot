@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/jasonlvhit/gocron"
+	"github.com/go-co-op/gocron"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -84,23 +84,21 @@ func main() {
 		log.Panic(err)
 	}
 
+	cron := gocron.NewScheduler(time.UTC)
+
 	initPoliceChannel(db)
 	initMathSentence(db)
-	initUserTracking(db)
+	initUserTracking(db, cron)
 	initIdeasChannel(db)
 	initGithubChannel(db)
-	initInfo()
 	initOdin()
-	//initMarkov(db)
+	//initMarkov(db, cron)
 
 	discord, err = discordgo.New("Bot " + token)
 	if err != nil {
 		fmt.Println("error creating Discord session,", err)
 		os.Exit(1)
 	}
-
-	usd := discordgo.UpdateStatusData{ Status: "Ruining users lives, one stupid message at a time", AFK: false}
-	discord.UpdateStatusComplex(usd)
 
 	discord.StateEnabled = true
 
@@ -144,6 +142,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	usd := discordgo.UpdateStatusData{ Status: "Ruining users lives, one stupid message at a time", AFK: false}
+	err = discord.UpdateStatusComplex(usd)
+	if err != nil {
+		fmt.Println("error updating status on discord,", err)
+	}
+
 	if len(adminGuildID) > 0 {
 		// Setup admin guild
 		log.Println("Setting up admin guild")
@@ -161,7 +165,7 @@ func main() {
 	go http.ListenAndServe(fmt.Sprintf(":%d", httpPort), nil)
 
 	log.Println("Starting CRON services...")
-	<-gocron.Start()
+	cron.StartAsync()
 
 	log.Println("VPBot is now running.")
 	sc := make(chan os.Signal, 1)
@@ -169,6 +173,7 @@ func main() {
 	<-sc
 	log.Println("VPBot is terminating...")
 
+	cron.Stop()
 	discord.Close()
 
 }
