@@ -103,6 +103,7 @@ func main() {
 	discord.StateEnabled = true
 
 	discord.AddHandler(messageCreate)
+	discord.AddHandler(discordReady)
 	discord.AddHandler(ideasQueueReactionAdd)
 
 	handleCommand("ack", "Will make bot say 'ACK'", false, discordAckHandler)
@@ -140,12 +141,6 @@ func main() {
 	if err != nil {
 		fmt.Println("Error opening Discord session: ", err)
 		os.Exit(1)
-	}
-
-	usd := discordgo.UpdateStatusData{ Status: "Ruining users lives, one stupid message at a time", AFK: false}
-	err = discord.UpdateStatusComplex(usd)
-	if err != nil {
-		fmt.Println("error updating status on discord,", err)
 	}
 
 	if len(adminGuildID) > 0 {
@@ -237,6 +232,19 @@ func helpHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
 	session.ChannelMessageSend(msg.ChannelID, sb.String())
 }
 
+func discordReady(s *discordgo.Session, event *discordgo.Ready) {
+	activity := discordgo.Activity{
+		Name: "users for fools, one stupid message at a time",
+		Type: discordgo.ActivityTypeGame,
+		URL: "",
+	}
+	usd := discordgo.UpdateStatusData{ Status: "online", AFK: false, Activities: []*discordgo.Activity{&activity}}
+	err := s.UpdateStatusComplex(usd)
+	if err != nil {
+		fmt.Println("error updating status on discord,", err)
+	}
+}
+
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author.ID == s.State.User.ID {
 		return
@@ -294,16 +302,6 @@ func userAllowedAdminBotCommands(s *discordgo.Session, guildID string, channelID
 	}
 
 	return hasPerm || hasRole
-}
-
-func snowflakeCreationTime(ID string) (t time.Time, err error) {
-	i, err := strconv.ParseInt(ID, 10, 64)
-	if err != nil {
-		return
-	}
-	timestamp := (i >> 22) + 1420070400000
-	t = time.Unix(timestamp/1000, 0)
-	return
 }
 
 const urlRegexString string = `(?:(?:https?|ftp):\/\/|\b(?:[a-z\d]+\.))(?:(?:[^\s()<>]+|\((?:[^\s()<>]+|(?:\([^\s()<>]+\)))?\))+(?:\((?:[^\s()<>]+|(?:\(?:[^\s()<>]+\)))?\)|[^\s!()\[\]{};:'".,<>?«»“”‘’]))?`
