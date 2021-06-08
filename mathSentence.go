@@ -3,9 +3,10 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"github.com/bwmarrin/discordgo"
 	"log"
 	"strings"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 var (

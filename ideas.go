@@ -1,53 +1,53 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/bwmarrin/discordgo"
 	"log"
+	"os"
 	"strings"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 var (
-	insertIdeasChannel        *sql.Stmt
-	deleteIdeasChannel        *sql.Stmt
-	queryIdeasChannelForGuild *sql.Stmt
-	queryAllIdeasChannel      *sql.Stmt
+	modQueueChannel *discordgo.Channel
+	ideasChannel *discordgo.Channel
 )
 
 type modQueueItem struct {
-	AuthorID         string `json:authorID`
-	AuthorName       string `json:authorName`
-	GuildID          string `json:guildID`
-	GuildName        string `json:guildName`
-	PostingChannelID string `json:postingChannelID`
-	Content          string `json:content`
+	AuthorID         string `json:"authorID"`
+	AuthorName       string `json:"authorName"`
+	GuildID          string `json:"guildID"`
+	GuildName        string `json:"guildName"`
+	PostingChannelID string `json:"postingChannelID"`
+	Content          string `json:"content"`
 }
 
-func initIdeasChannel(db *sql.DB) {
-	_, err := db.Exec("CREATE TABLE IF NOT EXISTS ideas_channel (id INTEGER PRIMARY KEY, guild_id TEXT, channel_id TEXT)")
+func initIdeasChannel(s *discordgo.Session) {
+	channelId := os.Getenv("VPBOT_MOD_QUEUE_CHANNEL")
+	ideasChannelId := os.Getenv("VPBOT_IDEAS_CHANNEL")
+
+	if(len(channelId) <= 0) {
+		return
+	}
+
+	var err error
+	modQueueChannel, err = s.Channel(channelId)
 	if err != nil {
-		log.Panic(err)
+		log.Printf("Couldn't find the ideas channel with ID: %s or %s", channelId, ideasChannelId)
+		return
 	}
 
-	insertIdeasChannel = dbPrepare(db, "INSERT INTO ideas_channel (guild_id, channel_id) VALUES (?, ?)")
-	deleteIdeasChannel = dbPrepare(db, "DELETE FROM ideas_channel WHERE channel_id = ?")
-	queryIdeasChannelForGuild = dbPrepare(db, "SELECT channel_id FROM ideas_channel WHERE guild_id = ?")
-	queryAllIdeasChannel = dbPrepare(db, "SELECT guild_id, channel_id FROM ideas_channel")
-}
-
-func setupIdeasHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
-	if setupIdeasChannel(session, msg.ChannelID, msg.Author) {
-		session.ChannelMessageSend(msg.ChannelID, "Is now Ideas channel. o7")
-	} else {
-		session.ChannelMessageSend(msg.ChannelID, "Channel already ideas for guild. o7")
+	ideasChannel, err = s.Channel(ideasChannelId)
+	if err != nil {
+		log.Printf("Couldn't find the ideas channel with ID: %s or %s", channelId, ideasChannelId)
+		return
 	}
 }
+
 func addIdeasHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
-	ok, postingChannelID := hasGuildIdeasChannel(msg.GuildID)
-
-	if ok == false {
+	if modQueueChannel == nil {
 		session.ChannelMessageSend(msg.ChannelID, "Guild does not have an ideas channel, ask a mod to add one")
 		return
 	}
@@ -62,7 +62,7 @@ func addIdeasHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
 		fmt.Sprintf("%s#%s", msg.Author.Username, msg.Author.Discriminator),
 		guild.ID,
 		guild.Name,
-		postingChannelID,
+		ideasChannel.ID,
 		idea,
 	}
 
@@ -103,38 +103,4 @@ func ideasQueueReactionAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd
 			}
 		}
 	}
-}
-
-func hasGuildIdeasChannel(guildID string) (bool, string) {
-	row := queryIdeasChannelForGuild.QueryRow(guildID)
-	var channelID string
-	err := row.Scan(&channelID)
-	if err == sql.ErrNoRows {
-		return false, ""
-	}
-
-	return true, channelID
-}
-
-func setupIdeasChannel(s *discordgo.Session, channelID string, user *discordgo.User) bool {
-	channel, _ := s.State.Channel(channelID)
-	guild, _ := s.State.Guild(channel.GuildID)
-
-	if ok, _ := hasGuildIdeasChannel(guild.ID); ok {
-		return false
-	}
-
-	data := discordgo.ChannelEdit{
-		Topic: "Use the command !addidea in any channel to post ideas, these will be added once a mod has reviewed them",
-	}
-
-	_, err := s.ChannelEditComplex(channelID, &data)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	insertIdeasChannel.Exec(guild.ID, channel.ID)
-	log.Printf("Setup ideas '%s'(%s) in '%s', requested by %s#%s\n", channel.Name, channel.ID, guild.Name, user.Username, user.Discriminator)
-
-	return true
 }

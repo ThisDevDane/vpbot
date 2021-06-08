@@ -4,11 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/bwmarrin/discordgo"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 var (

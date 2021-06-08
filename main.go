@@ -22,8 +22,8 @@ import (
 var (
 	token        string
 	verbose      bool
-	adminGuildID string
 	httpPort     int
+	guildID      string
 
 	urlRegex *regexp.Regexp
 	db       *sql.DB
@@ -34,11 +34,6 @@ var (
 	messageStreamHandlers = make([]func(*discordgo.Session, *discordgo.MessageCreate), 0)
 )
 
-type userTrackChannel struct {
-	guildID       string
-	postChannelID string
-}
-
 type commandHandler struct {
 	commandString string
 	description   string
@@ -48,12 +43,11 @@ type commandHandler struct {
 
 func init() {
 	token = os.Getenv("VPBOT_TOKEN")
-	adminGuildID = os.Getenv("VPBOT_ADMINGUILD_ID")
+	guildID = os.Getenv("VPBOT_GUILD_ID")
 	verbose, _ = strconv.ParseBool(os.Getenv("VPBOT_VERBOSE"))
 	httpPort, _ = strconv.Atoi(os.Getenv("VPBOT_HTTP_PORT"))
 
 	flag.StringVar(&token, "t", token, "Bot Token")
-	flag.StringVar(&adminGuildID, "a", adminGuildID, "Admin Guild ID")
 	flag.BoolVar(&verbose, "v", false, "Verbose Output")
 	flag.IntVar(&httpPort, "p", 13373, "HTTP port")
 	flag.Parse()
@@ -86,21 +80,28 @@ func main() {
 
 	cron := gocron.NewScheduler(time.UTC)
 
-	initPoliceChannel(db)
-	initMathSentence(db)
-	initUserTracking(db, cron)
-	initIdeasChannel(db)
-	initGithubChannel(db)
-	initOdin()
-	//initMarkov(db, cron)
-
 	discord, err = discordgo.New("Bot " + token)
 	if err != nil {
 		fmt.Println("error creating Discord session,", err)
 		os.Exit(1)
 	}
 
+	log.Println("Opening up connection to discord...")
+	err = discord.Open()
+	if err != nil {
+		fmt.Println("Error opening Discord session: ", err)
+		os.Exit(1)
+	}
+
 	discord.StateEnabled = true
+
+	initPoliceChannel(discord)
+	initMathSentence(db)
+	initUserTracking(discord, db, cron)
+	initIdeasChannel(discord)
+	initGithubChannel(discord)
+	//initOdin()
+	//initMarkov(db, cron)
 
 	discord.AddHandler(messageCreate)
 	discord.AddHandler(discordReady)
@@ -111,19 +112,16 @@ func main() {
 	handleCommand("version", "Will print the version of VPBot", false, versionCommandHandler)
 
 	handleCommand("usercount", "Post the current user count for this guild", true, userCountCommandHandler)
-	handleCommand("usertrack", "Tell VPBot to track the user count of this guild an post weekly updates (every sunday at 3pm UTC) to this channel", true, addUserTrackingHandler)
-	handleCommand("useruntrack", "Tell VPBot to stop tracking the user count of this guild", true, removeUserTrackingHandler)
 
-	handleCommand("addidea", "Suggest an idea to add to the server's idea channel, will go into a manual review queue before being posted", false, addIdeasHandler)
-	handleCommand("ideas", "Setup the channel to be where ideas added with !addideas are posted after moderation", true, setupIdeasHandler)
+	handleCommand("addidea",
+		"Suggest an idea to add to the server's idea channel, will go into a manual review queue before being posted",
+		false,
+		addIdeasHandler)
 
-	handleCommand("police", "channel to be policed (only messages containing links or attachments are allowed), messages not furfilling [sic] criteria will be deleted and a message will be sent to the offending user about why", true, addPoliceChannelHandler)
-	handleCommand("unpolice", "Remove this channel from the policing list", true, removePoliceChannelHandler)
-	handleCommand("policeinfo", "Shows what channels are being policed at the moment", true, infoPoliceChannelHandler)
-
-	handleCommand("githubchan", "Setup a channel as a github channel for webhooks messages", true, githubCommandHandler)
-
-	handleCommand("addmathsentence", "Will add a math related sentence that VPBot can say, make sure to make them about hating math", false, addMathSentenceHandler)
+	handleCommand("addmathsentence",
+		"Will add a math related sentence that VPBot can say, make sure to make them about hating math",
+		false,
+		addMathSentenceHandler)
 
 	handleCommand("odinrun", "Will compile an odin code block and run it", true, odinRunHandle)
 
@@ -136,40 +134,26 @@ func main() {
 	//addMessageStreamHandler(msgStreamMarkovTrainHandler)
 	//addMessageStreamHandler(msgStreamMarkovSayHandler)
 
-	log.Println("Opening up connection to discord...")
-	err = discord.Open()
-	if err != nil {
-		fmt.Println("Error opening Discord session: ", err)
-		os.Exit(1)
-	}
-
-	if len(adminGuildID) > 0 {
-		// Setup admin guild
-		log.Println("Setting up admin guild")
-		adminGuild, err := discord.Guild(adminGuildID)
-
-		if err != nil {
-			fmt.Println("Could not find admin guild:", adminGuildID, err)
-		} else {
-			setupAdminGuild(discord, adminGuild)
-		}
-	}
-
 	setupHTTP()
 	log.Printf("Starting HTTP server on port %d...\n", httpPort)
-	go http.ListenAndServe(fmt.Sprintf(":%d", httpPort), nil)
+	go func() {
+		err := http.ListenAndServe(fmt.Sprintf(":%d", httpPort), nil)
+		if err != nil {
+			panic("Unable to start HTTP server!")
+		}
+	}()
 
 	log.Println("Starting CRON services...")
 	cron.StartAsync()
 
 	log.Println("VPBot is now running.")
 	sc := make(chan os.Signal, 1)
-	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
+	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, syscall.SIGTERM)
 	<-sc
 	log.Println("VPBot is terminating...")
 
 	cron.Stop()
-	discord.Close()
+	_ = discord.Close()
 
 }
 
@@ -179,15 +163,18 @@ func setupHTTP() {
 	http.HandleFunc("/ack", ackHandler)
 }
 
-func ackHandler(w http.ResponseWriter, req *http.Request) {
-	fmt.Fprintf(w, "ACK")
+func ackHandler(w http.ResponseWriter, _ *http.Request) {
+	_, _ = fmt.Fprintf(w, "ACK")
 }
 
 func addMessageStreamHandler(handler func(*discordgo.Session, *discordgo.MessageCreate)) {
 	messageStreamHandlers = append(messageStreamHandlers, handler)
 }
 
-func handleCommand(cmdString string, desc string, modOnly bool, handler func(*discordgo.Session, *discordgo.MessageCreate)) {
+func handleCommand(cmdString string,
+	desc string,
+	modOnly bool,
+	handler func(*discordgo.Session, *discordgo.MessageCreate)) {
 	if _, ok := commandMap[cmdString]; ok == false {
 		cmdH := commandHandler{
 			cmdString,
@@ -202,7 +189,7 @@ func handleCommand(cmdString string, desc string, modOnly bool, handler func(*di
 }
 
 func discordAckHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
-	session.ChannelMessageSend(msg.ChannelID, "ACK")
+	_, _ = session.ChannelMessageSend(msg.ChannelID, "ACK")
 }
 
 func helpHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
@@ -229,16 +216,16 @@ func helpHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
 		}
 	}
 
-	session.ChannelMessageSend(msg.ChannelID, sb.String())
+	_, _ = session.ChannelMessageSend(msg.ChannelID, sb.String())
 }
 
-func discordReady(s *discordgo.Session, event *discordgo.Ready) {
+func discordReady(s *discordgo.Session, _ *discordgo.Ready) {
 	activity := discordgo.Activity{
 		Name: "users for fools, one stupid message at a time",
 		Type: discordgo.ActivityTypeGame,
-		URL: "",
+		URL:  "",
 	}
-	usd := discordgo.UpdateStatusData{ Status: "online", AFK: false, Activities: []*discordgo.Activity{&activity}}
+	usd := discordgo.UpdateStatusData{Status: "online", AFK: false, Activities: []*discordgo.Activity{&activity}}
 	err := s.UpdateStatusComplex(usd)
 	if err != nil {
 		fmt.Println("error updating status on discord,", err)
@@ -253,7 +240,13 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	guild, _ := s.State.Guild(m.GuildID)
 	channel, _ := s.State.Channel(m.ChannelID)
 
-	log.Printf("[%s|%s|%s#%s] (%s) %s\n", guild.Name, channel.Name, m.Author.Username, m.Author.Discriminator, m.ID, m.Content)
+	log.Printf("[%s|%s|%s#%s] (%s) %s\n",
+		guild.Name,
+		channel.Name,
+		m.Author.Username,
+		m.Author.Discriminator,
+		m.ID,
+		m.Content)
 
 	if strings.HasPrefix(m.Content, "!") {
 		message := strings.SplitN(m.Content, " ", 2)
@@ -266,7 +259,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 			if handler.modOnly && userAllowedAdminBotCommands(s, m.GuildID, m.ChannelID, m.Author.ID) == false {
 				log.Printf("User %s tried to use command %s but is not allowed (not a MOD)", m.Author.String(), cmd)
-				s.ChannelMessageSend(m.ChannelID, "Sorry, but we're not that type of friends </3")
+				_, _ = s.ChannelMessageSend(m.ChannelID, "Sorry, but we're not that type of friends </3")
 				return
 			}
 
@@ -282,13 +275,15 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 }
 
 func userAllowedAdminBotCommands(s *discordgo.Session, guildID string, channelID string, userID string) bool {
-	perm, _ := s.State.UserChannelPermissions(userID, channelID)
-	hasPerm := perm&discordgo.PermissionAdministrator != 0
+	perm, _ := s.UserChannelPermissions(userID, channelID)
+	if perm&discordgo.PermissionAdministrator != 0 {
+		return true
+	}
+
 	hasRole := false
 
-	member, _ := s.State.Member(guildID, userID)
+	member, _ := s.GuildMember(guildID, userID)
 	if member != nil {
-
 		guild, _ := s.State.Guild(guildID)
 		for _, x := range guild.Roles {
 			for _, y := range member.Roles {
@@ -301,7 +296,5 @@ func userAllowedAdminBotCommands(s *discordgo.Session, guildID string, channelID
 		}
 	}
 
-	return hasPerm || hasRole
+	return hasRole
 }
-
-const urlRegexString string = `(?:(?:https?|ftp):\/\/|\b(?:[a-z\d]+\.))(?:(?:[^\s()<>]+|\((?:[^\s()<>]+|(?:\([^\s()<>]+\)))?\))+(?:\((?:[^\s()<>]+|(?:\(?:[^\s()<>]+\)))?\)|[^\s!()\[\]{};:'".,<>?«»“”‘’]))?`
