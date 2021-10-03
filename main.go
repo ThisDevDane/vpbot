@@ -86,14 +86,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	discord.StateEnabled = true
+
 	log.Println("Opening up connection to discord...")
 	err = discord.Open()
 	if err != nil {
 		fmt.Println("Error opening Discord session: ", err)
 		os.Exit(1)
 	}
-
-	discord.StateEnabled = true
 
 	initPoliceChannel(discord)
 	initMathSentence(db)
@@ -123,7 +123,7 @@ func main() {
 		false,
 		addMathSentenceHandler)
 
-	handleCommand("odinrun", "Will compile an odin code block and run it", true, odinRunHandle)
+	//handleCommand("odinrun", "Will compile an odin code block and run it", true, odinRunHandle)
 
 	//handleCommand("markovsave", "Force a save of the markov chain", true, markovForceSave)
 	//handleCommand("markovsay", "Force a message generation in markov", false, markovForceSay)

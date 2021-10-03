@@ -40,7 +40,11 @@ func initUserTracking(s *discordgo.Session, db *sql.DB, scheduler *gocron.Schedu
 	queryUserTrackDataByGuildAndDate = dbPrepare(db,
 		"SELECT user_count FROM user_track_data WHERE guild_id = ? AND week_number = ? AND year = ?")
 
-	scheduler.Every(1).Sunday().At("15:00").Do(postUserTrackingInfo)
+	//_, err = scheduler.Every(1).Sunday().At("15:00").Do(postUserTrackingInfo)
+	_, err = scheduler.Every(30).Seconds().Do(postUserTrackingInfo)
+	if err != nil {
+		log.Panic(err)
+	}
 }
 
 func userCountCommandHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
@@ -49,7 +53,18 @@ func userCountCommandHandler(session *discordgo.Session, msg *discordgo.MessageC
 }
 
 func postUserTrackingInfo() {
-	guild, err := discord.State.Guild(guildID)
+	dClient, err := discordgo.New("Bot " + token)
+	if err != nil {
+		log.Panic("error creating Discord session,", err)
+	}
+
+	log.Println("Opening up connection to discord...")
+	err = dClient.Open()
+	if err != nil {
+		log.Panic("error opening Discord session,", err)
+	}
+
+	guild, err := dClient.State.Guild(guildID)
 	if err != nil {
 		log.Println("ERR TRYING TO GET GUILD!", guildID, err)
 		return
@@ -80,7 +95,7 @@ func postUserTrackingInfo() {
 	row := queryUserTrackDataByGuildAndDate.QueryRow(guild.ID, lastWeek, lastYear)
 	err = row.Scan(&lastWeekUserCount)
 	if err == sql.ErrNoRows {
-		discord.ChannelMessageSend(userTrackChannel.ID, fmt.Sprintf("User count in week %v: %v", week, guild.MemberCount))
+		dClient.ChannelMessageSend(userTrackChannel.ID, fmt.Sprintf("User count in week %v: %v", week, guild.MemberCount))
 		return
 	}
 
@@ -92,7 +107,7 @@ func postUserTrackingInfo() {
 		symbol = "down"
 	}
 
-	discord.ChannelMessageSend(userTrackChannel.ID,
+	dClient.ChannelMessageSend(userTrackChannel.ID,
 		fmt.Sprintf("User count in week %v %v: %v (%s %v%%) (last week: %v)",
 			week,
 			year,
@@ -100,4 +115,6 @@ func postUserTrackingInfo() {
 			symbol,
 			percent,
 			lastWeekUserCount))
+
+	dClient.Close()
 }
