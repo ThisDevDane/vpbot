@@ -85,8 +85,7 @@ func main() {
 		fmt.Println("error creating Discord session,", err)
 		os.Exit(1)
 	}
-
-	discord.StateEnabled = true
+	discord.Identify.Intents = discordgo.MakeIntent(discordgo.IntentsAllWithoutPrivileged | discordgo.IntentsGuildMembers)
 
 	log.Println("Opening up connection to discord...")
 	err = discord.Open()
@@ -94,6 +93,8 @@ func main() {
 		fmt.Println("Error opening Discord session: ", err)
 		os.Exit(1)
 	}
+	//NOTE(Hoej): Needs to be after discord.Open()
+	discord.StateEnabled = true
 
 	initPoliceChannel(discord)
 	initMathSentence(db)

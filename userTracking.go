@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -48,22 +47,12 @@ func initUserTracking(s *discordgo.Session, db *sql.DB, scheduler *gocron.Schedu
 }
 
 func userCountCommandHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
-	newSession, err := getNewDiscordSession()
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	guild, _ := newSession.State.Guild(msg.GuildID)
-	newSession.ChannelMessageSend(msg.ChannelID, fmt.Sprintf("Current user count: %d", guild.MemberCount))
+	guild, _ := session.State.Guild(msg.GuildID)
+	session.ChannelMessageSend(msg.ChannelID, fmt.Sprintf("Current user count: %d", guild.MemberCount))
 }
 
 func postUserTrackingInfo() {
-	dClient, err := getNewDiscordSession()
-	if err != nil {
-		log.Panic(err)
-	}
-
-	guild, err := dClient.State.Guild(guildID)
+	guild, err := discord.State.Guild(guildID)
 	if err != nil {
 		log.Println("ERR TRYING TO GET GUILD!", guildID, err)
 		return
@@ -94,7 +83,7 @@ func postUserTrackingInfo() {
 	row := queryUserTrackDataByGuildAndDate.QueryRow(guild.ID, lastWeek, lastYear)
 	err = row.Scan(&lastWeekUserCount)
 	if err == sql.ErrNoRows {
-		dClient.ChannelMessageSend(userTrackChannel.ID, fmt.Sprintf("User count in week %v: %v", week, guild.MemberCount))
+		discord.ChannelMessageSend(userTrackChannel.ID, fmt.Sprintf("User count in week %v: %v", week, guild.MemberCount))
 		return
 	}
 
@@ -106,7 +95,7 @@ func postUserTrackingInfo() {
 		symbol = "down"
 	}
 
-	dClient.ChannelMessageSend(userTrackChannel.ID,
+	discord.ChannelMessageSend(userTrackChannel.ID,
 		fmt.Sprintf("User count in week %v %v: %v (%s %v%%) (last week: %v)",
 			week,
 			year,
@@ -114,21 +103,4 @@ func postUserTrackingInfo() {
 			symbol,
 			percent,
 			lastWeekUserCount))
-
-	dClient.Close()
-}
-
-func getNewDiscordSession() (*discordgo.Session, error) {
-	session, err := discordgo.New("Bot " + token)
-	if err != nil {
-		return nil, errors.New(fmt.Sprintf("error creating Discord session, %v", err))
-	}
-
-	log.Println("Opening up connection to discord...")
-	err = session.Open()
-	if err != nil {
-		return nil, errors.New(fmt.Sprintf("error opening Discord session, %v", err))
-	}
-
-	return session, nil
 }
