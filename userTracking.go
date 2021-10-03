@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -40,28 +41,26 @@ func initUserTracking(s *discordgo.Session, db *sql.DB, scheduler *gocron.Schedu
 	queryUserTrackDataByGuildAndDate = dbPrepare(db,
 		"SELECT user_count FROM user_track_data WHERE guild_id = ? AND week_number = ? AND year = ?")
 
-	//_, err = scheduler.Every(1).Sunday().At("15:00").Do(postUserTrackingInfo)
-	_, err = scheduler.Every(30).Seconds().Do(postUserTrackingInfo)
+	_, err = scheduler.Every(1).Sunday().At("15:00").Do(postUserTrackingInfo)
 	if err != nil {
 		log.Panic(err)
 	}
 }
 
 func userCountCommandHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
-	guild, _ := session.State.Guild(msg.GuildID)
-	session.ChannelMessageSend(msg.ChannelID, fmt.Sprintf("Current user count: %d", guild.MemberCount))
+	newSession, err := getNewDiscordSession()
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	guild, _ := newSession.State.Guild(msg.GuildID)
+	newSession.ChannelMessageSend(msg.ChannelID, fmt.Sprintf("Current user count: %d", guild.MemberCount))
 }
 
 func postUserTrackingInfo() {
-	dClient, err := discordgo.New("Bot " + token)
+	dClient, err := getNewDiscordSession()
 	if err != nil {
-		log.Panic("error creating Discord session,", err)
-	}
-
-	log.Println("Opening up connection to discord...")
-	err = dClient.Open()
-	if err != nil {
-		log.Panic("error opening Discord session,", err)
+		log.Panic(err)
 	}
 
 	guild, err := dClient.State.Guild(guildID)
@@ -117,4 +116,19 @@ func postUserTrackingInfo() {
 			lastWeekUserCount))
 
 	dClient.Close()
+}
+
+func getNewDiscordSession() (*discordgo.Session, error) {
+	session, err := discordgo.New("Bot " + token)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("error creating Discord session, %v", err))
+	}
+
+	log.Println("Opening up connection to discord...")
+	err = session.Open()
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("error opening Discord session, %v", err))
+	}
+
+	return session, nil
 }
