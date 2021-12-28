@@ -24,6 +24,7 @@ var (
 	verbose      bool
 	httpPort     int
 	guildID      string
+	modChannelID      string
 
 	urlRegex *regexp.Regexp
 	db       *sql.DB
@@ -44,6 +45,7 @@ type commandHandler struct {
 func init() {
 	token = os.Getenv("VPBOT_TOKEN")
 	guildID = os.Getenv("VPBOT_GUILD_ID")
+	modChannelID = os.Getenv("VPBOT_MOD_CHAN_ID")
 	verbose, _ = strconv.ParseBool(os.Getenv("VPBOT_VERBOSE"))
 	httpPort, _ = strconv.Atoi(os.Getenv("VPBOT_HTTP_PORT"))
 
@@ -107,6 +109,7 @@ func main() {
 	discord.AddHandler(messageCreate)
 	discord.AddHandler(discordReady)
 	discord.AddHandler(ideasQueueReactionAdd)
+	discord.AddHandler(clonexBanProcedure)
 
 	handleCommand("ack", "Will make bot say 'ACK'", false, discordAckHandler)
 	handleCommand("help", "Will print a message with all available commands to the user", false, helpHandler)
@@ -230,6 +233,17 @@ func discordReady(s *discordgo.Session, _ *discordgo.Ready) {
 	err := s.UpdateStatusComplex(usd)
 	if err != nil {
 		fmt.Println("error updating status on discord,", err)
+	}
+}
+
+func clonexBanProcedure(s *discordgo.Session, e *discordgo.GuildMemberAdd) {
+	if strings.Contains(strings.ToLower(e.User.Username), "clonex") {
+		err := s.GuildBanCreateWithReason(guildID, e.User.ID, "auto ban cause scam bots for clonex", 7)
+		if err != nil {
+			s.ChannelMessageSend(modChannelID, fmt.Sprintf("Unable to ban %v, %v", e.User.Username, err))
+		} else {
+			s.ChannelMessageSend(modChannelID, fmt.Sprintf("Auto banned %v", e.User.Username))
+		}
 	}
 }
 
