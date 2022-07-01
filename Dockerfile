@@ -40,8 +40,6 @@ LABEL maintainer="Mikkel Hjortshoej <hoej@northwolfprod.com>"
 
 RUN apt-get update && \
   apt-get install -y --no-install-recommends \
-  llvm-10 \
-  clang-10 \
   ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 RUN update-ca-certificates
