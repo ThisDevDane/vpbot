@@ -52,7 +52,7 @@ func init() {
 	var ok bool
 	dataFolder, ok = os.LookupEnv("VPBOT_DATA")
 	if ok == false {
-		dataFolder = os.Getwd()
+		dataFolder, _ = os.Getwd()
 	}
 
 
@@ -83,7 +83,7 @@ func main() {
 
 	var err error
 	dbPath := dataFolder + "/vpbot.db"
-	_, err = os.Stats(dbPath)
+	_, err = os.Stat(dbPath)
 	if err != nil {
 		log.Panic(err)
 	}
