@@ -25,6 +25,7 @@ var (
 	httpPort     int
 	guildID      string
 	modChannelID      string
+	dataFolder string
 
 	urlRegex *regexp.Regexp
 	db       *sql.DB
@@ -48,6 +49,12 @@ func init() {
 	modChannelID = os.Getenv("VPBOT_MOD_CHAN_ID")
 	verbose, _ = strconv.ParseBool(os.Getenv("VPBOT_VERBOSE"))
 	httpPort, _ = strconv.Atoi(os.Getenv("VPBOT_HTTP_PORT"))
+	var ok bool
+	dataFolder, ok = os.LookupEnv("VPBOT_DATA")
+	if ok == false {
+		dataFolder = os.Getwd()
+	}
+
 
 	flag.StringVar(&token, "t", token, "Bot Token")
 	flag.BoolVar(&verbose, "v", false, "Verbose Output")
@@ -73,8 +80,15 @@ func main() {
 	}
 
 	urlRegex, _ = regexp.Compile(urlRegexString)
+
 	var err error
-	db, err = sql.Open("sqlite3", "./vpbot.db")
+	dbPath := dataFolder + "/vpbot.db"
+	_, err = os.Stats(dbPath)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	db, err = sql.Open("sqlite3", dataFolder+"/vpbot.db")
 
 	if err != nil {
 		log.Panic(err)
