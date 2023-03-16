@@ -1,12 +1,9 @@
-module vpbot
+module github.com/thisdevdane/vpbot
 
-go 1.13
+go 1.19
 
 require (
-	github.com/bwmarrin/discordgo v0.23.2
-	github.com/go-co-op/gocron v1.5.0
-	github.com/mattn/go-sqlite3 v1.14.7
-	github.com/mb-14/gomarkov v0.0.0-20210216094942-a5b484cc0243
-	golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2 // indirect
-	golang.org/x/sys v0.0.0-20190412213103-97732733099d // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/spf13/cobra v1.6.1 // indirect
+	github.com/spf13/pflag v1.0.5 // indirect
 )
