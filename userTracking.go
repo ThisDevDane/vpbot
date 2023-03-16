@@ -36,9 +36,9 @@ func initUserTracking(s *discordgo.Session, db *sql.DB, scheduler *gocron.Schedu
 	}
 
 	insertUserTrackData = dbPrepare(db,
-		"INSERT INTO user_track_data (guild_id, week_number, year, user_count) VALUES (?, ?, ?, ?)")
+		"INSERT INTO user_track_data (guild_id, week_number, year, user_count) VALUES ($1, $2, $3, $4)")
 	queryUserTrackDataByGuildAndDate = dbPrepare(db,
-		"SELECT user_count FROM user_track_data WHERE guild_id = ? AND week_number = ? AND year = ?")
+		"SELECT user_count FROM user_track_data WHERE guild_id = $1 AND week_number = $2 AND year = $3")
 
 	_, err = scheduler.Every(1).Sunday().At("15:00").Do(postUserTrackingInfo)
 	if err != nil {

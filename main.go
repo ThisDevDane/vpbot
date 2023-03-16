@@ -16,7 +16,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/go-co-op/gocron"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 )
 
 var (
@@ -24,8 +24,11 @@ var (
 	verbose      bool
 	httpPort     int
 	guildID      string
-	modChannelID      string
-	dataFolder string
+	modChannelID string
+
+	databaseHost string
+	databaseUser string
+	databasePass string
 
 	urlRegex *regexp.Regexp
 	db       *sql.DB
@@ -49,12 +52,10 @@ func init() {
 	modChannelID = os.Getenv("VPBOT_MOD_CHAN_ID")
 	verbose, _ = strconv.ParseBool(os.Getenv("VPBOT_VERBOSE"))
 	httpPort, _ = strconv.Atoi(os.Getenv("VPBOT_HTTP_PORT"))
-	var ok bool
-	dataFolder, ok = os.LookupEnv("VPBOT_DATA")
-	if ok == false {
-		dataFolder, _ = os.Getwd()
-	}
 
+	databaseHost = os.Getenv("VPBOT_DB_HOST")
+	databaseUser = os.Getenv("VPBOT_DB_USER")
+	databasePass = os.Getenv("VPBOT_DB_PASS")
 
 	flag.StringVar(&token, "t", token, "Bot Token")
 	flag.BoolVar(&verbose, "v", false, "Verbose Output")
@@ -65,7 +66,7 @@ func init() {
 func dbPrepare(db *sql.DB, query string) *sql.Stmt {
 	stmt, err := db.Prepare(query)
 	if err != nil {
-		log.Println(err)
+		log.Println(err, query)
 	}
 
 	return stmt
@@ -82,14 +83,7 @@ func main() {
 	urlRegex, _ = regexp.Compile(urlRegexString)
 
 	var err error
-	dbPath := dataFolder + "/vpbot.db"
-	_, err = os.Stat(dbPath)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	db, err = sql.Open("sqlite3", dataFolder+"/vpbot.db")
-
+	db, err = sql.Open("postgres", fmt.Sprintf("host=%s port=5432 user=%s password=%s dbname=vpbot sslmode=disable", databaseHost, databaseUser, databasePass))
 	if err != nil {
 		log.Panic(err)
 	}
