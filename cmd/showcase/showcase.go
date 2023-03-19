@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/signal"
 	"regexp"
@@ -36,13 +37,16 @@ var ShowcaseCmd = &cobra.Command{
 		sc := make(chan os.Signal, 1)
 		signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 		<-sc
+
+		outgoingGateway.Close()
+		incomingGateway.Close()
 	},
 }
 
 func moderateChannel(incoming *gateway.Client, outgoing *gateway.Client) {
 	ch := incoming.ObtainMessageChannel(gateway.GetMessageChannelKey(channelId))
 	for pubMsg := range ch {
-		msg := shared.DiscordMsg{}
+		msg := gateway.IncomingMsg{}
 		if err := json.Unmarshal([]byte(pubMsg.Payload), &msg); err != nil {
 			log.Error().Err(err).Send()
 		} else {
@@ -53,17 +57,19 @@ func moderateChannel(incoming *gateway.Client, outgoing *gateway.Client) {
 			urlInMsg := urlRegex.MatchString(msg.Content)
 
 			if !urlInMsg && !msg.HasAttachOrEmbeds {
-				outgoing.PublishMessage(gateway.GatewayOutChannel, shared.DiscordMsg{
+				outgoing.PublishMessage(gateway.GatewayOutChannel, gateway.OutgoingMsg{
 					UserDM: true,
 					UserID: msg.UserID,
 					Content: "I've deleted your recent message in our showcase channel.\n" +
-						"Showcase messages require that either you include a link or a picture/file in your message,\n" +
-						"if you believe your message has been wrongfully deleted, please contact a mod.",
+						"Showcase messages require that either you include a link or a picture/file in your message, " +
+						"if you're trying to discuss a posted showcase, please either start a thread or visit the showcase-banter channel\n" +
+						"If you believe your message has been wrongfully deleted, please contact a mod.",
 				})
-				outgoing.PublishMessage(gateway.GatewayCommandChannel, shared.GatewayCommand{
-					Type:      shared.GatewayCmdDeleteMsg,
+				outgoing.PublishMessage(gateway.GatewayCommandChannel, gateway.Command{
+					Type:      gateway.CmdDeleteMsg,
 					ChannelID: msg.ChannelID,
 					MsgId:     msg.MsgId,
+					Reason:    fmt.Sprintf("failed showcase checks; url: %v attachembeds: %v", urlInMsg, msg.HasAttachOrEmbeds),
 				})
 			}
 		}

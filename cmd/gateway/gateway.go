@@ -72,13 +72,17 @@ var GatewayCmd = &cobra.Command{
 func performCommands(s *discordgo.Session, gateClient *gateway.Client) {
 	ch := gateClient.ObtainMessageChannel(gateway.GatewayCommandChannel)
 	for pubMsg := range ch {
-		cmd := shared.GatewayCommand{}
+		cmd := gateway.Command{}
 		if err := json.Unmarshal([]byte(pubMsg.Payload), &cmd); err != nil {
 			log.Error().Err(err).Send()
 		} else {
 			switch cmd.Type {
-			case shared.GatewayCmdDeleteMsg:
-				log.Trace().Str("channel", cmd.ChannelID).Str("msg_id", cmd.MsgId).Msg("deleting msg")
+			case gateway.CmdDeleteMsg:
+				log.Info().
+					Str("channel", cmd.ChannelID).
+					Str("msg_id", cmd.MsgId).
+					Str("reason", cmd.Reason).
+					Msg("deleting msg")
 				s.ChannelMessageDelete(cmd.ChannelID, cmd.MsgId)
 
 			default:
@@ -92,22 +96,32 @@ func performCommands(s *discordgo.Session, gateClient *gateway.Client) {
 func pumpOutgoingMessage(s *discordgo.Session, gateClient *gateway.Client) {
 	ch := gateClient.ObtainMessageChannel(gateway.GatewayOutChannel)
 	for pubMsg := range ch {
-		msg := shared.DiscordMsg{}
+		msg := gateway.OutgoingMsg{}
 		if err := json.Unmarshal([]byte(pubMsg.Payload), &msg); err != nil {
 			log.Error().Err(err).Send()
 		} else {
-			if msg.InternalID != nil {
+			switch {
+			case msg.UserDM:
+				dm, _ := s.UserChannelCreate(msg.UserID)
+				s.ChannelMessageSend(dm.ID, msg.Content)
+
+			case msg.ReplyID != nil:
+				s.ChannelMessageSendReply(msg.ChannelID, msg.Content, &discordgo.MessageReference{
+					ChannelID: msg.ChannelID,
+					MessageID: *msg.ReplyID,
+				})
+			case msg.InternalID != nil:
 				storedID, err := rdb.Get(ctx, *msg.InternalID).Result()
 				if err != nil {
 					s.ChannelMessageEdit(msg.ChannelID, storedID, msg.Content)
 					if err != nil {
 						log.Error().Err(err).Send()
 					}
+					continue
 				}
-			} else if msg.UserDM {
-				dm, _ := s.UserChannelCreate(msg.UserID)
-				s.ChannelMessageSend(dm.ID, msg.Content)
-			} else {
+
+				fallthrough
+			default:
 				m, err := s.ChannelMessageSend(msg.ChannelID, msg.Content)
 				if err != nil {
 					log.Error().Err(err).Send()
@@ -133,7 +147,7 @@ func messagePump(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	ch, _ := s.State.Channel(m.ChannelID)
-	err := incomingGateway.PublishMessage(gatewayChannel, shared.DiscordMsg{
+	err := incomingGateway.PublishMessage(gatewayChannel, gateway.IncomingMsg{
 		MsgId:             m.ID,
 		ChannelID:         m.ChannelID,
 		UserID:            m.Author.ID,
