@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/redis/go-redis/v9"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -63,11 +63,11 @@ var gatewayCmd = &cobra.Command{
 		err = session.Open()
 		defer session.Close()
 		if err != nil {
-			log.Fatalln("error opening connection,", err)
+			log.Fatal().Msgf("error opening connection,", err)
 		}
 
 		go pumpOutgoingMessage(session, rdb)
-		log.Println("gateway is now running.  Press CTRL-C to exit.")
+		log.Info().Msg("gateway is now running.  Press CTRL-C to exit.")
 		sc := make(chan os.Signal, 1)
 		signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 		<-sc
@@ -82,20 +82,20 @@ func pumpOutgoingMessage(s *discordgo.Session, rdb *redis.Client) {
 	for pubMsg := range ch {
 		msg := DiscordMsg{}
 		if err := json.Unmarshal([]byte(pubMsg.Payload), &msg); err != nil {
-			log.Println(err)
+			log.Error().Err(err).Send()
 		} else {
 			if msg.InternalID != nil {
 				storedID, err := rdb.Get(ctx, *msg.InternalID).Result()
 				if err != nil {
 					s.ChannelMessageEdit(msg.ChannelID, storedID, msg.Content)
 					if err != nil {
-						log.Println(err)
+						log.Error().Err(err).Send()
 					}
 				}
 			} else {
 				m, err := s.ChannelMessageSend(msg.ChannelID, msg.Content)
 				if err != nil {
-					log.Println(err)
+					log.Error().Err(err).Send()
 					continue
 				}
 
@@ -124,7 +124,7 @@ func messagePump(s *discordgo.Session, m *discordgo.MessageCreate) {
 	})
 
 	if status != nil && status.Err() != nil {
-		log.Println(status.Err())
+		log.Error().Err(status.Err()).Send()
 	}
 }
 
