@@ -18,9 +18,8 @@ const (
 )
 
 type Client struct {
-	rdb     *redis.Client
-	ctx     context.Context
-	channel string
+	rdb *redis.Client
+	ctx context.Context
 
 	activePubSub *redis.PubSub
 }

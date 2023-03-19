@@ -61,7 +61,7 @@ var GatewayCmd = &cobra.Command{
 		}
 
 		go pumpOutgoingMessage(session, outGoingGateway)
-		go performCommands(session, outGoingGateway)
+		go performCommands(session, cmdGateway)
 		log.Info().Msg("gateway is now running.  Press CTRL-C to exit.")
 		sc := make(chan os.Signal, 1)
 		signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
