@@ -19,6 +19,10 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Extract current date
+      id: current_date
+      run: echo "current_date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
     - name: Extract metadata (tags, labels) for Docker
       id: meta
       uses: docker/metadata-action@v4.1.1
@@ -28,6 +32,7 @@ jobs:
           type=edge,branch=dev
           type=sha
           type=ref,event=tag
+
     - name: Build and push Docker image
       uses: docker/build-push-action@v3.2.0
       with:
@@ -38,4 +43,4 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         build-args: |
             GIT_COMMIT=${{ github.sha }}
-            BUILD_TIME=$(date +%Y-%m-%d)
+            BUILD_TIME=${{ steps.current_date.outputs.current_date }}
