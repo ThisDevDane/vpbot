@@ -74,7 +74,7 @@ func performCommands(s *discordgo.Session, gateClient *gateway.Client) {
 	for pubMsg := range ch {
 		cmd := gateway.Command{}
 		if err := json.Unmarshal([]byte(pubMsg.Payload), &cmd); err != nil {
-			log.Error().Err(err).Send()
+			log.Error().Stack().Err(err).Send()
 		} else {
 			switch cmd.Type {
 			case gateway.CmdDeleteMsg:
@@ -98,7 +98,7 @@ func pumpOutgoingMessage(s *discordgo.Session, gateClient *gateway.Client) {
 	for pubMsg := range ch {
 		msg := gateway.OutgoingMsg{}
 		if err := json.Unmarshal([]byte(pubMsg.Payload), &msg); err != nil {
-			log.Error().Err(err).Send()
+			log.Error().Stack().Err(err).Send()
 		} else {
 			switch {
 			case msg.UserDM:
@@ -112,28 +112,35 @@ func pumpOutgoingMessage(s *discordgo.Session, gateClient *gateway.Client) {
 				})
 			case msg.InternalID != nil:
 				storedID, err := rdb.Get(ctx, *msg.InternalID).Result()
-				if err != nil {
+				switch {
+				case err == redis.Nil:
+					sendMsgToDiscord(s, msg)
+				case err != nil:
+					log.Error().Stack().Err(err).Send()
+				default:
+					log.Info().Msgf("internal id %v found, editing msg %v", *msg.InternalID, storedID)
 					s.ChannelMessageEdit(msg.ChannelID, storedID, msg.Content)
-					if err != nil {
-						log.Error().Err(err).Send()
-					}
-					continue
-				}
 
-				fallthrough
+				}
 			default:
-				m, err := s.ChannelMessageSend(msg.ChannelID, msg.Content)
-				if err != nil {
-					log.Error().Err(err).Send()
-					continue
-				}
-
-				if msg.InternalID != nil {
-					rdb.Set(ctx, *msg.InternalID, m.ID, 24*time.Hour)
-				}
+				sendMsgToDiscord(s, msg)
 			}
 		}
 	}
+}
+
+func sendMsgToDiscord(s *discordgo.Session, msg gateway.OutgoingMsg) {
+	m, err := s.ChannelMessageSend(msg.ChannelID, msg.Content)
+	if err != nil {
+		log.Error().Stack().Err(err).Send()
+		return
+	}
+
+	if msg.InternalID != nil {
+		log.Info().Msgf("storing msg %v as internal id %v", m.ID, *msg.InternalID)
+		rdb.Set(ctx, *msg.InternalID, m.ID, 48*time.Hour)
+	}
+
 }
 
 func messagePump(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -157,7 +164,7 @@ func messagePump(s *discordgo.Session, m *discordgo.MessageCreate) {
 	})
 
 	if err != nil {
-		log.Error().Err(err).Send()
+		log.Error().Stack().Err(err).Send()
 	}
 }
 

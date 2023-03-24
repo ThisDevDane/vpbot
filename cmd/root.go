@@ -1,13 +1,14 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog/pkgerrors"
 	"github.com/spf13/cobra"
 	gateway "github.com/thisdevdane/vpbot/cmd/gateway"
+	github "github.com/thisdevdane/vpbot/cmd/github"
 	"github.com/thisdevdane/vpbot/cmd/shared"
 	showcase "github.com/thisdevdane/vpbot/cmd/showcase"
 )
@@ -20,6 +21,7 @@ var rootCmd = &cobra.Command{
 	},
 	PersistentPreRun: func(_ *cobra.Command, _ []string) {
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+		zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 		if developmentLogging {
 			log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 			zerolog.SetGlobalLevel(zerolog.TraceLevel)
@@ -34,11 +36,11 @@ func init() {
 
 	rootCmd.AddCommand(gateway.GatewayCmd)
 	rootCmd.AddCommand(showcase.ShowcaseCmd)
+	rootCmd.AddCommand(github.GithubCmd)
 }
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		log.Fatal().Err(err).Send()
 	}
 }

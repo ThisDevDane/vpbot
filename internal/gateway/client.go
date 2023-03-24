@@ -67,6 +67,5 @@ func (c *Client) ObtainMessageChannel(channel string) <-chan *redis.Message {
 }
 
 func (c *Client) Close() {
-	c.activePubSub.Close()
 	c.rdb.Close()
 }
