@@ -52,6 +52,23 @@ var GithubCmd = &cobra.Command{
 			}
 		}()
 
+		go func() {
+		outer:
+			for {
+				rdb.HSet(cmd.Context(), "cmd_info:github", "version", cmd.Version, "date", "TODO")
+				rdb.Expire(cmd.Context(), "cmd_info:github", 5*time.Second)
+				ctx, cancel := context.WithTimeout(cmd.Context(), 1*time.Second)
+				defer cancel()
+				select {
+				case <-cmd.Context().Done():
+					break outer
+
+				case <-ctx.Done():
+					continue
+				}
+			}
+		}()
+
 		log.Info().Msgf("github is now running on ID %s. Press CTRL-C to exit.", channelId)
 		sc := make(chan os.Signal, 1)
 		signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)

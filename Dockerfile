@@ -1,4 +1,4 @@
-FROM golang:1.20 as builder
+FROM golang:1.20-alpine as builder
 
 ARG GIT_COMMIT=DEV
 ARG BUILD_TIME=DEV

@@ -4,17 +4,18 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
 )
 
 const (
-	GatewayMessageChannelWildcard = "discord.msg.*"
-	GatewayMessageChannelTmpl     = "discord.msg.%s"
-	GatewayOutChannel             = "discord.out"
-	GatewayCommandChannel         = "discord.cmd"
-	GatewayInternalGossipChannel  = "internal.gossip"
+	GatewayMessageChannelWildcard = "discord:msg:*"
+	GatewayMessageChannelTmpl     = "discord:msg:%s"
+	GatewayOutChannel             = "discord:out"
+	GatewayCommandChannel         = "discord:cmd"
+	GatewayInternalGossipChannel  = "internal:gossip"
 )
 
 type Client struct {
@@ -36,6 +37,12 @@ func CreateClient(ctx context.Context, opts GatewayOpts) *Client {
 		DB:       0,
 	})
 
+	c, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := rdb.Ping(c).Err(); err != nil {
+		log.Fatal().Err(err).Msg("couldn't do initial ping to redis")
+	}
+
 	return &Client{
 		rdb: rdb,
 		ctx: ctx,
@@ -56,7 +63,7 @@ func (c *Client) PublishMessage(channel string, content any) error {
 }
 
 func (c *Client) ObtainMessageChannel(channel string) <-chan *redis.Message {
-	log.Trace().Str("channel", channel).Msgf("subscribing")
+	log.Trace().Str("channel", channel).Msg("subscribing")
 	if strings.HasSuffix(channel, "*") {
 		c.activePubSub = c.rdb.PSubscribe(c.ctx, channel)
 	} else {

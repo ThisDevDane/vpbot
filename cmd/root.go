@@ -11,6 +11,7 @@ import (
 	github "github.com/thisdevdane/vpbot/cmd/github"
 	"github.com/thisdevdane/vpbot/cmd/shared"
 	showcase "github.com/thisdevdane/vpbot/cmd/showcase"
+	usertrack "github.com/thisdevdane/vpbot/cmd/usertrack"
 )
 
 var developmentLogging bool
@@ -34,12 +35,20 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&shared.RedisAddr, "redis-addr", "localhost:6379", "")
 	rootCmd.PersistentFlags().StringVar(&shared.RedisPassword, "redis-pass", "", "")
 
-	rootCmd.AddCommand(gateway.GatewayCmd)
-	rootCmd.AddCommand(showcase.ShowcaseCmd)
-	rootCmd.AddCommand(github.GithubCmd)
+	addCmd(gateway.GatewayCmd)
+	addCmd(showcase.ShowcaseCmd)
+	addCmd(github.GithubCmd)
+	addCmd(usertrack.UsertrackCmd)
 }
 
-func Execute() {
+func addCmd(cmd *cobra.Command) {
+	cmd.Version = rootCmd.Version
+	rootCmd.AddCommand(cmd)
+
+}
+
+func Execute(version string) {
+	rootCmd.Version = version
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal().Err(err).Send()
 	}
