@@ -21,7 +21,7 @@ var (
 	urlRegex  *regexp.Regexp
 )
 
-var ShowcaseCmd = &cobra.Command{
+var Cmd = &cobra.Command{
 	Use: "showcase",
 	Run: func(cmd *cobra.Command, _ []string) {
 		gatewayOpts := gateway.GatewayOpts{
@@ -77,8 +77,8 @@ func moderateChannel(incoming *gateway.Client, outgoing *gateway.Client) {
 }
 
 func init() {
-	ShowcaseCmd.Flags().StringVar(&channelId, "channel-id", "", "The ID of the channel to moderate as a showcase channel")
-	ShowcaseCmd.MarkFlagRequired("channel-id")
+	Cmd.Flags().StringVar(&channelId, "channel-id", "", "The ID of the channel to moderate as a showcase channel")
+	Cmd.MarkFlagRequired("channel-id")
 
 	urlRegex = regexp.MustCompile(urlRegexString)
 }

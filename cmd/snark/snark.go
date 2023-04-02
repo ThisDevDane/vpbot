@@ -34,7 +34,7 @@ func init() {
 	shurrupRegex, _ = regexp.Compile(shurrupRegexString)
 }
 
-var SnarkCmd = &cobra.Command{
+var Cmd = &cobra.Command{
 	Use: "snark",
 	Run: func(cmd *cobra.Command, _ []string) {
 		gatewayOpts := gateway.GatewayOpts{
@@ -79,6 +79,6 @@ func snark(incoming *gateway.Client, outgoing *gateway.Client) {
 }
 
 func init() {
-	SnarkCmd.Flags().StringVar(&channelId, "channel-id", "", "The ID of the channel to moderate as a showcase channel")
-	SnarkCmd.MarkFlagRequired("channel-id")
+	Cmd.Flags().StringVar(&channelId, "channel-id", "", "The ID of the channel to moderate as a showcase channel")
+	Cmd.MarkFlagRequired("channel-id")
 }

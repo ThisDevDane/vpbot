@@ -36,11 +36,11 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&shared.RedisAddr, "redis-addr", "localhost:6379", "")
 	rootCmd.PersistentFlags().StringVar(&shared.RedisPassword, "redis-pass", "", "")
 
-	addCmd(gateway.GatewayCmd)
-	addCmd(showcase.ShowcaseCmd)
-	addCmd(github.GithubCmd)
-	addCmd(usertrack.UsertrackCmd)
-	addCmd(snark.SnarkCmd)
+	addCmd(gateway.Cmd)
+	addCmd(showcase.Cmd)
+	addCmd(github.Cmd)
+	addCmd(usertrack.Cmd)
+	addCmd(snark.Cmd)
 }
 
 func addCmd(cmd *cobra.Command) {

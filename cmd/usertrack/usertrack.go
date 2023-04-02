@@ -26,7 +26,7 @@ var (
 	dbPass string
 )
 
-var UsertrackCmd = &cobra.Command{
+var Cmd = &cobra.Command{
 	Use: "usertrack",
 	Run: func(cmd *cobra.Command, _ []string) {
 		gatewayOpts := gateway.GatewayOpts{
@@ -239,16 +239,16 @@ func getMinMax(points []userCountValue) (min int, max int) {
 }
 
 func init() {
-	UsertrackCmd.Flags().StringVar(&channelId, "channel-id", "", "The ID of the channel to moderate as a showcase channel")
-	UsertrackCmd.MarkFlagRequired("channel-id")
-	UsertrackCmd.Flags().StringVar(&botToken, "token", "", "Bot token for connecting to Discord Gateway")
-	UsertrackCmd.MarkFlagRequired("token")
+	Cmd.Flags().StringVar(&channelId, "channel-id", "", "The ID of the channel to moderate as a showcase channel")
+	Cmd.MarkFlagRequired("channel-id")
+	Cmd.Flags().StringVar(&botToken, "token", "", "Bot token for connecting to Discord Gateway")
+	Cmd.MarkFlagRequired("token")
 
-	UsertrackCmd.Flags().StringVar(&dbHost, "db-host", "", "The host for the database to store stats")
-	UsertrackCmd.MarkFlagRequired("db-host")
-	UsertrackCmd.Flags().StringVar(&dbDb, "db-db", "vpbot", "The database for the database to store stats")
-	UsertrackCmd.Flags().StringVar(&dbUser, "db-user", "", "The user for the database to store stats")
-	UsertrackCmd.MarkFlagRequired("db-user")
-	UsertrackCmd.Flags().StringVar(&dbPass, "db-pass", "", "The pass for the database to store stats")
-	UsertrackCmd.MarkFlagRequired("db-pass")
+	Cmd.Flags().StringVar(&dbHost, "db-host", "", "The host for the database to store stats")
+	Cmd.MarkFlagRequired("db-host")
+	Cmd.Flags().StringVar(&dbDb, "db-db", "vpbot", "The database for the database to store stats")
+	Cmd.Flags().StringVar(&dbUser, "db-user", "", "The user for the database to store stats")
+	Cmd.MarkFlagRequired("db-user")
+	Cmd.Flags().StringVar(&dbPass, "db-pass", "", "The pass for the database to store stats")
+	Cmd.MarkFlagRequired("db-pass")
 }

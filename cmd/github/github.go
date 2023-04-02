@@ -28,7 +28,7 @@ var (
 	outgoingGateway *gateway.Client
 )
 
-var GithubCmd = &cobra.Command{
+var Cmd = &cobra.Command{
 	Use: "github",
 	Run: func(cmd *cobra.Command, _ []string) {
 		gatewayOpts := gateway.GatewayOpts{
@@ -190,9 +190,9 @@ func getFailedFromCache(ctx context.Context, suiteID int) ([]string, error) {
 }
 
 func init() {
-	GithubCmd.Flags().StringVar(&channelId, "channel-id", "", "The ID of the channel to moderate as a showcase channel")
-	GithubCmd.MarkFlagRequired("channel-id")
-	GithubCmd.Flags().StringVar(&roleId, "role-id", "", "The ID of the role to mention")
-	GithubCmd.MarkFlagRequired("role-id")
-	GithubCmd.Flags().IntVar(&httpPort, "http-port", 8080, "Port to listen for webhooks on")
+	Cmd.Flags().StringVar(&channelId, "channel-id", "", "The ID of the channel to moderate as a showcase channel")
+	Cmd.MarkFlagRequired("channel-id")
+	Cmd.Flags().StringVar(&roleId, "role-id", "", "The ID of the role to mention")
+	Cmd.MarkFlagRequired("role-id")
+	Cmd.Flags().IntVar(&httpPort, "http-port", 8080, "Port to listen for webhooks on")
 }

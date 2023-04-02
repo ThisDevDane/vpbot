@@ -27,7 +27,7 @@ var (
 
 	ctx context.Context
 )
-var GatewayCmd = &cobra.Command{
+var Cmd = &cobra.Command{
 	Use: "gateway",
 	Run: func(cmd *cobra.Command, _ []string) {
 		ctx = cmd.Context()
@@ -169,6 +169,6 @@ func messagePump(s *discordgo.Session, m *discordgo.MessageCreate) {
 }
 
 func init() {
-	GatewayCmd.Flags().StringVar(&botToken, "token", "", "Bot token for connecting to Discord Gateway")
-	GatewayCmd.MarkFlagRequired("token")
+	Cmd.Flags().StringVar(&botToken, "token", "", "Bot token for connecting to Discord Gateway")
+	Cmd.MarkFlagRequired("token")
 }
