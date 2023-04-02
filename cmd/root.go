@@ -11,6 +11,7 @@ import (
 	github "github.com/thisdevdane/vpbot/cmd/github"
 	"github.com/thisdevdane/vpbot/cmd/shared"
 	showcase "github.com/thisdevdane/vpbot/cmd/showcase"
+	snark "github.com/thisdevdane/vpbot/cmd/snark"
 	usertrack "github.com/thisdevdane/vpbot/cmd/usertrack"
 )
 
@@ -39,6 +40,7 @@ func init() {
 	addCmd(showcase.ShowcaseCmd)
 	addCmd(github.GithubCmd)
 	addCmd(usertrack.UsertrackCmd)
+	addCmd(snark.SnarkCmd)
 }
 
 func addCmd(cmd *cobra.Command) {
