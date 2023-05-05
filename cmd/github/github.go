@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -24,7 +23,6 @@ var (
 	roleId          string
 	httpPort        int
 	rdb             *redis.Client
-	urlRegex        *regexp.Regexp
 	outgoingGateway *gateway.Client
 )
 
@@ -64,6 +62,7 @@ var Cmd = &cobra.Command{
 					break outer
 
 				case <-ctx.Done():
+					cancel() // Go Defer rules means the cancel isn't actually called in this loop
 					continue
 				}
 			}
