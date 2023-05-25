@@ -53,8 +53,8 @@ var Cmd = &cobra.Command{
 		go func() {
 		outer:
 			for {
-				rdb.HSet(cmd.Context(), "cmd_info:github", "version", cmd.Version, "date", "TODO")
-				rdb.Expire(cmd.Context(), "cmd_info:github", 5*time.Second)
+				// rdb.HSet(cmd.Context(), "cmd_info:github", "version", cmd.Version, "date", "TODO")
+				// rdb.Expire(cmd.Context(), "cmd_info:github", 5*time.Second)
 				ctx, cancel := context.WithTimeout(cmd.Context(), 1*time.Second)
 				defer cancel()
 				select {
@@ -62,7 +62,7 @@ var Cmd = &cobra.Command{
 					break outer
 
 				case <-ctx.Done():
-					cancel() // Go Defer rules means the cancel isn't actually called in this loop
+					// cancel() // Go Defer rules means the cancel isn't actually called in this loop
 					continue
 				}
 			}
