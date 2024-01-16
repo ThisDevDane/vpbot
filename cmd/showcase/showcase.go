@@ -50,7 +50,7 @@ func moderateChannel(incoming *gateway.Client, outgoing *gateway.Client) {
 		if err := json.Unmarshal([]byte(pubMsg.Payload), &msg); err != nil {
 			log.Error().Err(err).Send()
 		} else {
-			if msg.IsThread {
+			if msg.IsThread || msg.IsBot {
 				continue
 			}
 

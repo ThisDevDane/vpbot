@@ -6,6 +6,7 @@ type IncomingMsg struct {
 	MsgId             string
 	ChannelID         string
 	UserID            string
+	IsBot             bool
 	Content           string
 	HasAttachOrEmbeds bool
 	IsThread          bool

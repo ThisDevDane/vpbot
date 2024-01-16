@@ -158,6 +158,7 @@ func messagePump(s *discordgo.Session, m *discordgo.MessageCreate) {
 		MsgId:             m.ID,
 		ChannelID:         m.ChannelID,
 		UserID:            m.Author.ID,
+		IsBot:             m.Author.Bot,
 		Content:           m.Content,
 		HasAttachOrEmbeds: len(m.Attachments) > 0 || len(m.Embeds) > 0,
 		IsThread:          ch.IsThread(),
